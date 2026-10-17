@@ -111,7 +111,7 @@
       outline: none;
     }
 
-    .modes {
+    .modes, .diff-group {
       display: flex;
       background: var(--bg-elev);
       border-radius: 10px;
@@ -119,21 +119,21 @@
       gap: 2px;
     }
 
-    .modes button {
+    .modes button, .diff-group button {
       border: 0;
       background: transparent;
       color: var(--sub);
-      padding: 7px 12px;
+      padding: 7px 10px;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
       transition: 0.15s ease;
       white-space: nowrap;
     }
 
-    .modes button:hover { color: var(--text); }
-    .modes button.active {
+    .modes button:hover, .diff-group button:hover { color: var(--text); }
+    .modes button.active, .diff-group button.active {
       background: var(--bg-soft);
       color: var(--caret);
     }
@@ -419,7 +419,6 @@
       margin-bottom: 14px;
     }
 
-    /* 선택지 카드 박스 스타일 */
     .preset-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
@@ -526,6 +525,13 @@
           <button type="button" data-mode="3">빈칸만 채우기</button>
           <button type="button" data-mode="4">백지 암기</button>
         </div>
+
+        <!-- 빈칸 관련 모드(2, 3)에서만 노출되는 난이도 선택 버튼 -->
+        <div class="diff-group" id="diffGroup" style="display: none;">
+          <button type="button" data-diff="0.2">쉬움</button>
+          <button type="button" data-diff="0.3" class="active">보통</button>
+          <button type="button" data-diff="0.5">어려움</button>
+        </div>
       </div>
 
       <div class="stats">
@@ -599,7 +605,7 @@
 
   <script>
     (function () {
-      const STORAGE_KEY = "memotype_state_v2";
+      const STORAGE_KEY = "memotype_state_v3";
 
       const KEYWORDS = {
         c: new Set([
@@ -917,55 +923,6 @@
               "    }",
               "}"
             ].join("\n")
-          },
-          {
-            title: "DFS 재귀 탐색",
-            tag: "Recursion",
-            code: [
-              "#include <iostream>",
-              "#include <vector>",
-              "using namespace std;",
-              "",
-              "void dfs(int cur, const vector<vector<int>>& graph, vector<bool>& visited) {",
-              "    visited[cur] = true;",
-              "    cout << cur << \" \";",
-              "",
-              "    for (int next : graph[cur]) {",
-              "        if (!visited[next]) {",
-              "            dfs(next, graph, visited);",
-              "        }",
-              "    }",
-              "}"
-            ].join("\n")
-          },
-          {
-            title: "다익스트라 최단경로",
-            tag: "Priority Queue",
-            code: [
-              "#include <iostream>",
-              "#include <vector>",
-              "#include <queue>",
-              "using namespace std;",
-              "",
-              "void dijkstra(int start, const vector<vector<pair<int, int>>>& adj, vector<int>& dist) {",
-              "    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;",
-              "    dist[start] = 0;",
-              "    pq.push({0, start});",
-              "",
-              "    while (!pq.empty()) {",
-              "        auto [cost, cur] = pq.top();",
-              "        pq.pop();",
-              "        if (dist[cur] < cost) continue;",
-              "",
-              "        for (auto [weight, next] : adj[cur]) {",
-              "            if (dist[next] > cost + weight) {",
-              "                dist[next] = cost + weight;",
-              "                pq.push({dist[next], next});",
-              "            }",
-              "        }",
-              "    }",
-              "}"
-            ].join("\n")
           }
         ],
         java: [
@@ -993,50 +950,6 @@
               "    }",
               "}"
             ].join("\n")
-          },
-          {
-            title: "스택 괄호 검사",
-            tag: "ValidParentheses.java",
-            code: [
-              "import java.util.Stack;",
-              "",
-              "public class ValidParentheses {",
-              "    public static boolean isValid(String s) {",
-              "        Stack<Character> stack = new Stack<>();",
-              "        for (char c : s.toCharArray()) {",
-              "            if (c == '(') {",
-              "                stack.push(')');",
-              "            } else if (c == '{') {",
-              "                stack.push('}');",
-              "            } else if (c == '[') {",
-              "                stack.push(']');",
-              "            } else if (stack.isEmpty() || stack.pop() != c) {",
-              "                return false;",
-              "            }",
-              "        }",
-              "        return stack.isEmpty();",
-              "    }",
-              "}"
-            ].join("\n")
-          },
-          {
-            title: "단일 연결 리스트",
-            tag: "LinkedList.java",
-            code: [
-              "public class SinglyLinkedList {",
-              "    static class Node {",
-              "        int data;",
-              "        Node next;",
-              "        Node(int d) { data = d; next = null; }",
-              "    }",
-              "    Node head;",
-              "    public void addFirst(int data) {",
-              "        Node newNode = new Node(data);",
-              "        newNode.next = head;",
-              "        head = newNode;",
-              "    }",
-              "}"
-            ].join("\n")
           }
         ],
         python: [
@@ -1056,43 +969,6 @@
               "data = [3, 6, 8, 10, 1, 2, 1]",
               "print(quick_sort(data))"
             ].join("\n")
-          },
-          {
-            title: "이진 탐색",
-            tag: "binary_search.py",
-            code: [
-              "def binary_search(arr, target):",
-              "    left, right = 0, len(arr) - 1",
-              "    while left <= right:",
-              "        mid = (left + right) // 2",
-              "        if arr[mid] == target:",
-              "            return mid",
-              "        elif arr[mid] < target:",
-              "            left = mid + 1",
-              "        else:",
-              "            right = mid - 1",
-              "    return -1"
-            ].join("\n")
-          },
-          {
-            title: "BFS 미로 탐색",
-            tag: "bfs_deque.py",
-            code: [
-              "from collections import deque",
-              "",
-              "def bfs(graph, start):",
-              "    visited = set([start])",
-              "    queue = deque([start])",
-              "    order = []",
-              "    while queue:",
-              "        vertex = queue.popleft()",
-              "        order.append(vertex)",
-              "        for neighbor in graph[vertex]:",
-              "            if neighbor not in visited:",
-              "                visited.add(neighbor)",
-              "                queue.append(neighbor)",
-              "    return order"
-            ].join("\n")
           }
         ]
       };
@@ -1107,6 +983,7 @@
         langSelect: document.getElementById("langSelect"),
         modalLangSelect: document.getElementById("modalLangSelect"),
         presetBar: document.getElementById("presetBar"),
+        diffGroup: document.getElementById("diffGroup"),
         statLang: document.getElementById("statLang"),
         statWpm: document.getElementById("statWpm"),
         statAcc: document.getElementById("statAcc"),
@@ -1120,6 +997,7 @@
       const state = {
         lang: "c",
         mode: 1,
+        difficulty: 0.3, // 기본 보통 (30%)
         sound: true,
         raw: PRESETS.c[0].code,
         source: "",
@@ -1185,6 +1063,7 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             lang: state.lang,
             mode: state.mode,
+            difficulty: state.difficulty,
             sound: state.sound,
             raw: state.raw
           }));
@@ -1198,6 +1077,7 @@
           const parsed = JSON.parse(saved);
           if (parsed.lang && KEYWORDS[parsed.lang]) state.lang = parsed.lang;
           if (parsed.mode >= 1 && parsed.mode <= 4) state.mode = parsed.mode;
+          if (typeof parsed.difficulty === "number") state.difficulty = parsed.difficulty;
           if (typeof parsed.sound === "boolean") state.sound = parsed.sound;
           if (typeof parsed.raw === "string" && parsed.raw.trim()) state.raw = parsed.raw;
         } catch (e) {}
@@ -1211,7 +1091,6 @@
           .replace(/"/g, "&quot;");
       }
 
-      /* 백지 암기용: 연산자/포인터/괄호 주변 공백 차이를 무시하고 비교하는 정규화 함수 */
       function normalizeCodeLine(str) {
         let out = "";
         let inStr = false;
@@ -1240,7 +1119,6 @@
             let j = i + 1;
             while (j < s.length && /\s/.test(s[j])) j += 1;
             let next = s[j] || "";
-            // 양쪽 모두 식별자/숫자/전처리기인 경우에만 공백 1칸 유지 (예: typedef int, Queue *p vs Queue* p)
             if (/[A-Za-z0-9_#]/.test(prev) && /[A-Za-z0-9_#]/.test(next)) {
               out += " ";
             }
@@ -1388,12 +1266,11 @@
         return tokens;
       }
 
-      function pickBlanks(tokens) {
+      function pickBlanks(tokens, ratio) {
         const idxs = [];
         for (let i = 0; i < tokens.length; i += 1) {
           if (tokens[i].hideable) idxs.push(i);
         }
-        const ratio = 0.3;
         const n = Math.max(1, Math.round(idxs.length * ratio));
         for (let i = idxs.length - 1; i > 0; i -= 1) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -1428,8 +1305,17 @@
         el.statLang.textContent = state.lang.toUpperCase();
         el.soundBtn.textContent = state.sound ? "타건음 ON" : "타건음 OFF";
         el.soundBtn.classList.toggle("active-toggle", state.sound);
+
         document.querySelectorAll(".modes button").forEach(function (btn) {
           btn.classList.toggle("active", Number(btn.getAttribute("data-mode")) === state.mode);
+        });
+
+        // 빈칸 관련 모드(2, 3)일 때만 난이도 선택 버튼 노출
+        const showDiff = (state.mode === 2 || state.mode === 3);
+        el.diffGroup.style.display = showDiff ? "flex" : "none";
+        document.querySelectorAll("#diffGroup button").forEach(function (btn) {
+          const val = Number(btn.getAttribute("data-diff"));
+          btn.classList.toggle("active", Math.abs(val - state.difficulty) < 0.01);
         });
       }
 
@@ -1478,10 +1364,10 @@
         el.hintBtn.classList.toggle("active-toggle", false);
         el.hintBtn.textContent = "힌트 보기";
 
-        if (!keepBlanks) {
-          state.tokens = tokenize(state.source);
-          state.blankSet = pickBlanks(state.tokens);
-        }
+        // 항상 새로운 빈칸이 뚫리도록 keepBlanks를 무시하고 새로 계산
+        state.tokens = tokenize(state.source);
+        state.blankSet = pickBlanks(state.tokens, state.difficulty);
+
         state.blankOrder = [];
         for (let i = 0; i < state.tokens.length; i += 1) {
           if (state.blankSet.has(i)) {
@@ -1719,7 +1605,6 @@
         }
       }
 
-      /* Tab 단독 키로 현재 빈칸/줄 스킵 */
       function skipCurrentStep() {
         if (state.finished) return;
         startClock();
@@ -1727,7 +1612,6 @@
 
         if (state.mode === 1 || state.mode === 2) {
           if (state.index >= state.source.length) return;
-          // 현재 위치가 빈칸(블라인드)이면 해당 빈칸 끝까지 자동 완성, 아니면 현재 단어/줄 스킵
           if (state.mode === 2 && state.charMask[state.index]) {
             while (state.index < state.source.length && state.charMask[state.index]) {
               state.flags[state.index] = 1;
@@ -1884,7 +1768,6 @@
         if (state.finished) return;
         startClock();
 
-        // 이미 오타가 뜬 상태에서 Enter를 한 번 더 누르면 맞춘 것으로 인정하고 다음 줄로 패스
         if (state.lineError) {
           state.lineError = false;
           state.lineDiff = null;
@@ -1905,7 +1788,6 @@
         const indent = leadingWs(orig);
         const assembled = indent + state.lineText;
 
-        // 포인터(*), 연산자, 괄호 주변 공백 차이를 무시하고 비교
         if (normalizeCodeLine(assembled) === normalizeCodeLine(orig)) {
           const typedLen = state.lineText.length;
           state.keyCorrect += Math.max(1, typedLen);
@@ -2005,17 +1887,24 @@
       }
 
       function restart() {
-        resetPractice(true);
+        resetPractice(false);
       }
 
       function setMode(mode) {
         state.mode = mode;
-        resetPractice(true);
+        resetPractice(false);
       }
 
       document.querySelectorAll(".modes button").forEach(function (btn) {
         btn.addEventListener("click", function () {
           setMode(Number(btn.getAttribute("data-mode")));
+        });
+      });
+
+      document.querySelectorAll("#diffGroup button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          state.difficulty = Number(btn.getAttribute("data-diff"));
+          resetPractice(false);
         });
       });
 
