@@ -324,10 +324,19 @@
       font-size: 12px;
       color: var(--error);
       padding-left: 46px;
-      margin: 2px 0 8px;
+      margin: 4px 0 10px;
       white-space: pre-wrap;
+      line-height: 1.5;
     }
     .diff-row .exp { color: var(--caret); }
+    .diff-row .pass-guide {
+      color: var(--sub);
+      display: inline-block;
+      margin-left: 10px;
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
 
     .finish {
       position: absolute;
@@ -383,7 +392,7 @@
     .overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.55);
+      background: rgba(0, 0, 0, 0.6);
       display: none;
       place-items: center;
       z-index: 20;
@@ -391,10 +400,10 @@
     }
     .overlay.show { display: grid; }
     .modal {
-      width: min(920px, 100%);
+      width: min(940px, 100%);
       background: #2b2d30;
       border-radius: 14px;
-      padding: 22px;
+      padding: 24px;
       box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
     }
     .modal-header {
@@ -407,17 +416,53 @@
     .modal .note {
       color: var(--sub);
       font-size: 13px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
-    .preset-bar {
+
+    /* 선택지 카드 박스 스타일 */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .preset-card {
+      background: #232528;
+      border: 1.5px solid #3c3f43;
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
       display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-bottom: 10px;
+      flex-direction: column;
+      gap: 4px;
     }
+    .preset-card span.sub-tag {
+      font-size: 11px;
+      color: var(--sub);
+      font-family: "JetBrains Mono", monospace;
+    }
+    .preset-card:hover {
+      border-color: var(--caret);
+      background: var(--bg-soft);
+      transform: translateY(-1px);
+    }
+    .preset-card.selected {
+      border-color: var(--caret);
+      background: var(--caret-dim);
+      color: var(--caret);
+    }
+    .preset-card.selected span.sub-tag {
+      color: var(--text);
+    }
+
     textarea#rawCode {
       width: 100%;
-      height: 350px;
+      height: 310px;
       resize: vertical;
       background: #232528;
       color: var(--text);
@@ -495,7 +540,7 @@
         <button type="button" class="btn ghost" id="hintBtn" hidden>힌트 보기</button>
         <button type="button" class="btn active-toggle" id="soundBtn">타건음 ON</button>
         <button type="button" class="btn" id="restartBtn">재시작</button>
-        <button type="button" class="btn primary" id="openModalBtn">코드 입력 / 프리셋</button>
+        <button type="button" class="btn primary" id="openModalBtn">코드 입력 / 목록</button>
       </div>
     </header>
 
@@ -518,18 +563,20 @@
 
     <footer>
       <div>
+        <kbd>Tab</kbd> 모르는 빈칸/줄 스킵
+        &nbsp;·&nbsp;
         <kbd>Tab</kbd> + <kbd>Enter</kbd> 재시작
         &nbsp;·&nbsp;
-        <kbd>Esc</kbd> 코드 입력 및 프리셋
+        <kbd>Esc</kbd> 코드 입력 / 목록
       </div>
-      <div>주석 자동 제거 · 스마트 들여쓰기 · 브라우저 자동 저장</div>
+      <div>유연한 띄어쓰기 판정 · 주석 자동 제거 · 브라우저 자동 저장</div>
     </footer>
   </div>
 
   <div class="overlay" id="overlay">
     <div class="modal" role="dialog" aria-labelledby="modalTitle">
       <div class="modal-header">
-        <h2 id="modalTitle">코드 입력 및 프리셋 선택</h2>
+        <h2 id="modalTitle">코드 입력 / 목록</h2>
         <select id="modalLangSelect" class="lang-select">
           <option value="c">C</option>
           <option value="cpp">C++</option>
@@ -537,8 +584,8 @@
           <option value="python">Python</option>
         </select>
       </div>
-      <p class="note">프리셋을 고르거나 연습할 코드를 붙여넣으세요. 언어별 주석(<code>//</code>, <code>/* */</code>, Python <code>#</code>)은 자동으로 제거되고 브라우저에 자동 저장됩니다.</p>
-      <div class="preset-bar" id="presetBar"></div>
+      <p class="note">아래 목록에서 예시를 선택하거나 직접 연습할 코드를 붙여넣으세요. 주석은 시작 시 자동으로 제거됩니다.</p>
+      <div class="preset-grid" id="presetBar"></div>
       <textarea id="rawCode" spellcheck="false"></textarea>
       <div class="modal-actions">
         <span style="color: var(--sub); font-size: 12px; align-self: center;">* 작성한 코드는 이 브라우저에 자동 저장됩니다.</span>
@@ -552,7 +599,7 @@
 
   <script>
     (function () {
-      const STORAGE_KEY = "memotype_state_v1";
+      const STORAGE_KEY = "memotype_state_v2";
 
       const KEYWORDS = {
         c: new Set([
@@ -565,7 +612,7 @@
         cpp: new Set([
           "auto","break","case","catch","class","const","constexpr","continue","default",
           "delete","do","double","else","enum","explicit","export","extern","false",
-          "float","for","friend","goto","if","inline","int","long","Mutable","namespace",
+          "float","for","friend","goto","if","inline","int","long","namespace",
           "new","noexcept","nullptr","operator","private","protected","public","return",
           "short","signed","sizeof","static","struct","switch","template","this","throw",
           "true","try","typedef","typename","union","unsigned","using","virtual","void",
@@ -591,7 +638,8 @@
       const PRESETS = {
         c: [
           {
-            title: "C 원형 큐 (Array)",
+            title: "배열 스택",
+            tag: "Stack_Array.h",
             code: [
               "#include <stdio.h>",
               "#include <stdlib.h>",
@@ -600,45 +648,51 @@
               "typedef int Boolean;",
               "",
               "typedef struct {",
-              "    Element *queue;",
+              "    Element *stack;",
               "    int size;",
-              "    int front, rear;",
-              "} Queue;",
+              "    int top;",
+              "} Stack;",
               "",
-              "Queue* CreateQueue(int size)",
+              "Stack *CreateStack(int size)",
               "{",
-              "    Queue *pQueue = (Queue *)malloc(sizeof(Queue));",
-              "    if(pQueue == NULL)",
+              "    Stack *pStack = (Stack *)malloc(sizeof(Stack));",
+              "    if(pStack == NULL)",
               "        return NULL;",
-              "    pQueue->queue = (Element *)malloc(size * sizeof(Element));",
-              "    if(pQueue->queue == NULL){",
-              "        free(pQueue);",
+              "    pStack->stack = (Element *)malloc(size * sizeof(Element));",
+              "    if(pStack->stack == NULL){",
+              "        free(pStack);",
               "        return NULL;",
               "    }",
-              "    pQueue->size = size;",
-              "    pQueue->front = pQueue->rear = 0;",
-              "    return pQueue;",
+              "    pStack->size = size;",
+              "    pStack->top = -1;",
+              "    return pStack;",
               "}",
               "",
-              "void Enqueue(Queue *q, Element item)",
+              "void Push(Stack *pStack, Element item)",
               "{",
-              "    if((q->rear + 1) % q->size == q->front)",
+              "    if(pStack->top == pStack->size - 1)",
               "        return;",
-              "    q->rear = (q->rear + 1) % q->size;",
-              "    q->queue[q->rear] = item;",
+              "    pStack->stack[++pStack->top] = item;",
               "}",
               "",
-              "Element Dequeue(Queue *q)",
+              "Element Pop(Stack *pStack)",
               "{",
-              "    if(q->front == q->rear)",
+              "    if(pStack->top < 0)",
               "        return 0;",
-              "    q->front = (q->front + 1) % q->size;",
-              "    return q->queue[q->front];",
+              "    return pStack->stack[pStack->top--];",
+              "}",
+              "",
+              "void DestroyStack(Stack *pStack)",
+              "{",
+              "    if(pStack->stack != NULL)",
+              "        free(pStack->stack);",
+              "    free(pStack);",
               "}"
             ].join("\n")
           },
           {
-            title: "C 연결 리스트 스택 (Link)",
+            title: "연결 리스트 스택",
+            tag: "Stack_Link.h",
             code: [
               "#include <stdio.h>",
               "#include <stdlib.h>",
@@ -689,11 +743,155 @@
               "    return item;",
               "}"
             ].join("\n")
+          },
+          {
+            title: "원형 큐 (배열)",
+            tag: "Queue_Array.h",
+            code: [
+              "#include <stdio.h>",
+              "#include <stdlib.h>",
+              "",
+              "typedef int Element;",
+              "typedef int Boolean;",
+              "",
+              "typedef struct {",
+              "    Element *queue;",
+              "    int size;",
+              "    int front, rear;",
+              "} Queue;",
+              "",
+              "Queue* CreateQueue(int size)",
+              "{",
+              "    Queue *pQueue = (Queue *)malloc(sizeof(Queue));",
+              "    if(pQueue == NULL)",
+              "        return NULL;",
+              "    pQueue->queue = (Element *)malloc(size * sizeof(Element));",
+              "    if(pQueue->queue == NULL){",
+              "        free(pQueue);",
+              "        return NULL;",
+              "    }",
+              "    pQueue->size = size;",
+              "    pQueue->front = pQueue->rear = 0;",
+              "    return pQueue;",
+              "}",
+              "",
+              "void Enqueue(Queue *q, Element item)",
+              "{",
+              "    if((q->rear + 1) % q->size == q->front)",
+              "        return;",
+              "    q->rear = (q->rear + 1) % q->size;",
+              "    q->queue[q->rear] = item;",
+              "}",
+              "",
+              "Element Dequeue(Queue *q)",
+              "{",
+              "    if(q->front == q->rear)",
+              "        return 0;",
+              "    q->front = (q->front + 1) % q->size;",
+              "    return q->queue[q->front];",
+              "}"
+            ].join("\n")
+          },
+          {
+            title: "연결 리스트 큐",
+            tag: "Queue_Link.h",
+            code: [
+              "#include <stdio.h>",
+              "#include <stdlib.h>",
+              "",
+              "typedef int Element;",
+              "typedef int Boolean;",
+              "",
+              "typedef struct tQueueNode {",
+              "    Element data;",
+              "    struct tQueueNode *next;",
+              "} QueueNode;",
+              "",
+              "typedef struct {",
+              "    int count;",
+              "    QueueNode *front, *rear;",
+              "} Queue;",
+              "",
+              "Queue* CreateQueue(int size)",
+              "{",
+              "    Queue *pNewQueue = (Queue*)malloc(sizeof(Queue));",
+              "    if(pNewQueue == NULL)",
+              "        return NULL;",
+              "    pNewQueue->count = 0;",
+              "    pNewQueue->front = pNewQueue->rear = NULL;",
+              "    return pNewQueue;",
+              "}",
+              "",
+              "void Enqueue(Queue *pQueue, Element item)",
+              "{",
+              "    QueueNode *pNewNode = (QueueNode*)malloc(sizeof(QueueNode));",
+              "    if(pNewNode == NULL)",
+              "        return;",
+              "    pNewNode->data = item;",
+              "    pNewNode->next = NULL;",
+              "    if(pQueue->count <= 0){",
+              "        pQueue->front = pQueue->rear = pNewNode;",
+              "    } else {",
+              "        pQueue->rear->next = pNewNode;",
+              "        pQueue->rear = pNewNode;",
+              "    }",
+              "    pQueue->count++;",
+              "}",
+              "",
+              "Element Dequeue(Queue *pQueue)",
+              "{",
+              "    if(pQueue->count <= 0)",
+              "        return 0;",
+              "    QueueNode *pFront = pQueue->front;",
+              "    Element item = pFront->data;",
+              "    if(pQueue->count == 1){",
+              "        pQueue->front = pQueue->rear = NULL;",
+              "    } else {",
+              "        pQueue->front = pFront->next;",
+              "    }",
+              "    free(pFront);",
+              "    pQueue->count--;",
+              "    return item;",
+              "}"
+            ].join("\n")
+          },
+          {
+            title: "진수 변환 (스택 활용)",
+            tag: "Convert.c",
+            code: [
+              "#include <stdio.h>",
+              "#include \"Stack_Link.h\"",
+              "",
+              "int main(void)",
+              "{",
+              "    int num = 0;",
+              "    Stack *pStack = CreateStack(100);",
+              "",
+              "    printf(\"Enter a number: \");",
+              "    scanf(\"%d\", &num);",
+              "",
+              "    int temp = num;",
+              "    while(temp > 0){",
+              "        Push(pStack, temp % 2);",
+              "        temp = temp / 2;",
+              "    }",
+              "",
+              "    printf(\"The binary number of %d: \", num);",
+              "    while(!IsEmptyStack(pStack)){",
+              "        printf(\"%d\", Pop(pStack));",
+              "    }",
+              "    printf(\"\\n\");",
+              "",
+              "    DestroyStack(pStack);",
+              "    return 0;",
+              "}"
+            ].join("\n")
           }
         ],
         cpp: [
           {
-            title: "C++ BFS 탐색 (Queue)",
+            title: "BFS 그래프 탐색",
+            tag: "Queue + Vector",
             code: [
               "#include <iostream>",
               "#include <vector>",
@@ -719,11 +917,61 @@
               "    }",
               "}"
             ].join("\n")
+          },
+          {
+            title: "DFS 재귀 탐색",
+            tag: "Recursion",
+            code: [
+              "#include <iostream>",
+              "#include <vector>",
+              "using namespace std;",
+              "",
+              "void dfs(int cur, const vector<vector<int>>& graph, vector<bool>& visited) {",
+              "    visited[cur] = true;",
+              "    cout << cur << \" \";",
+              "",
+              "    for (int next : graph[cur]) {",
+              "        if (!visited[next]) {",
+              "            dfs(next, graph, visited);",
+              "        }",
+              "    }",
+              "}"
+            ].join("\n")
+          },
+          {
+            title: "다익스트라 최단경로",
+            tag: "Priority Queue",
+            code: [
+              "#include <iostream>",
+              "#include <vector>",
+              "#include <queue>",
+              "using namespace std;",
+              "",
+              "void dijkstra(int start, const vector<vector<pair<int, int>>>& adj, vector<int>& dist) {",
+              "    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;",
+              "    dist[start] = 0;",
+              "    pq.push({0, start});",
+              "",
+              "    while (!pq.empty()) {",
+              "        auto [cost, cur] = pq.top();",
+              "        pq.pop();",
+              "        if (dist[cur] < cost) continue;",
+              "",
+              "        for (auto [weight, next] : adj[cur]) {",
+              "            if (dist[next] > cost + weight) {",
+              "                dist[next] = cost + weight;",
+              "                pq.push({dist[next], next});",
+              "            }",
+              "        }",
+              "    }",
+              "}"
+            ].join("\n")
           }
         ],
         java: [
           {
-            title: "Java 이진 탐색 (Binary Search)",
+            title: "이진 탐색",
+            tag: "BinarySearch.java",
             code: [
               "public class BinarySearch {",
               "    public static int binarySearch(int[] arr, int target) {",
@@ -745,11 +993,56 @@
               "    }",
               "}"
             ].join("\n")
+          },
+          {
+            title: "스택 괄호 검사",
+            tag: "ValidParentheses.java",
+            code: [
+              "import java.util.Stack;",
+              "",
+              "public class ValidParentheses {",
+              "    public static boolean isValid(String s) {",
+              "        Stack<Character> stack = new Stack<>();",
+              "        for (char c : s.toCharArray()) {",
+              "            if (c == '(') {",
+              "                stack.push(')');",
+              "            } else if (c == '{') {",
+              "                stack.push('}');",
+              "            } else if (c == '[') {",
+              "                stack.push(']');",
+              "            } else if (stack.isEmpty() || stack.pop() != c) {",
+              "                return false;",
+              "            }",
+              "        }",
+              "        return stack.isEmpty();",
+              "    }",
+              "}"
+            ].join("\n")
+          },
+          {
+            title: "단일 연결 리스트",
+            tag: "LinkedList.java",
+            code: [
+              "public class SinglyLinkedList {",
+              "    static class Node {",
+              "        int data;",
+              "        Node next;",
+              "        Node(int d) { data = d; next = null; }",
+              "    }",
+              "    Node head;",
+              "    public void addFirst(int data) {",
+              "        Node newNode = new Node(data);",
+              "        newNode.next = head;",
+              "        head = newNode;",
+              "    }",
+              "}"
+            ].join("\n")
           }
         ],
         python: [
           {
-            title: "Python 퀵 정렬 (Quick Sort)",
+            title: "퀵 정렬",
+            tag: "quick_sort.py",
             code: [
               "def quick_sort(arr):",
               "    if len(arr) <= 1:",
@@ -762,6 +1055,43 @@
               "",
               "data = [3, 6, 8, 10, 1, 2, 1]",
               "print(quick_sort(data))"
+            ].join("\n")
+          },
+          {
+            title: "이진 탐색",
+            tag: "binary_search.py",
+            code: [
+              "def binary_search(arr, target):",
+              "    left, right = 0, len(arr) - 1",
+              "    while left <= right:",
+              "        mid = (left + right) // 2",
+              "        if arr[mid] == target:",
+              "            return mid",
+              "        elif arr[mid] < target:",
+              "            left = mid + 1",
+              "        else:",
+              "            right = mid - 1",
+              "    return -1"
+            ].join("\n")
+          },
+          {
+            title: "BFS 미로 탐색",
+            tag: "bfs_deque.py",
+            code: [
+              "from collections import deque",
+              "",
+              "def bfs(graph, start):",
+              "    visited = set([start])",
+              "    queue = deque([start])",
+              "    order = []",
+              "    while queue:",
+              "        vertex = queue.popleft()",
+              "        order.append(vertex)",
+              "        for neighbor in graph[vertex]:",
+              "            if neighbor not in visited:",
+              "                visited.add(neighbor)",
+              "                queue.append(neighbor)",
+              "    return order"
             ].join("\n")
           }
         ]
@@ -799,6 +1129,7 @@
         keyCorrect: 0,
         keyWrong: 0,
         tabHeld: false,
+        tabComboUsed: false,
         showHint: false,
         index: 0,
         flags: [],
@@ -814,7 +1145,6 @@
         lineDiff: null
       };
 
-      /* Web Audio API 합성 타건음 */
       let audioCtx = null;
       function playClick(isError) {
         if (!state.sound) return;
@@ -879,6 +1209,47 @@
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
+      }
+
+      /* 백지 암기용: 연산자/포인터/괄호 주변 공백 차이를 무시하고 비교하는 정규화 함수 */
+      function normalizeCodeLine(str) {
+        let out = "";
+        let inStr = false;
+        let quote = "";
+        const s = String(str || "").trim();
+        for (let i = 0; i < s.length; i += 1) {
+          const ch = s[i];
+          if (inStr) {
+            out += ch;
+            if (ch === "\\" && i + 1 < s.length) {
+              out += s[i + 1];
+              i += 1;
+              continue;
+            }
+            if (ch === quote) inStr = false;
+            continue;
+          }
+          if (ch === '"' || ch === "'") {
+            inStr = true;
+            quote = ch;
+            out += ch;
+            continue;
+          }
+          if (/\s/.test(ch)) {
+            let prev = out[out.length - 1] || "";
+            let j = i + 1;
+            while (j < s.length && /\s/.test(s[j])) j += 1;
+            let next = s[j] || "";
+            // 양쪽 모두 식별자/숫자/전처리기인 경우에만 공백 1칸 유지 (예: typedef int, Queue *p vs Queue* p)
+            if (/[A-Za-z0-9_#]/.test(prev) && /[A-Za-z0-9_#]/.test(next)) {
+              out += " ";
+            }
+            i = j - 1;
+            continue;
+          }
+          out += ch;
+        }
+        return out;
       }
 
       function stripCommentsByLang(src, lang) {
@@ -1066,15 +1437,22 @@
         const list = PRESETS[lang] || [];
         el.presetBar.innerHTML = "";
         list.forEach(function (item) {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "btn";
-          btn.textContent = "프리셋: " + item.title;
-          btn.addEventListener("click", function () {
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "preset-card";
+          if (el.rawCode.value.trim() === item.code.trim()) {
+            card.classList.add("selected");
+          }
+          card.innerHTML = '<span>' + esc(item.title) + '</span><span class="sub-tag">' + esc(item.tag || "") + '</span>';
+          card.addEventListener("click", function () {
             el.rawCode.value = item.code;
+            el.presetBar.querySelectorAll(".preset-card").forEach(function (c) {
+              c.classList.remove("selected");
+            });
+            card.classList.add("selected");
             el.rawCode.focus();
           });
-          el.presetBar.appendChild(btn);
+          el.presetBar.appendChild(card);
         });
       }
 
@@ -1308,8 +1686,9 @@
           }
           html += "</span></div>";
           if (i === state.lineIndex && state.lineError && state.lineDiff) {
-            html += '<div class="diff-row">오타: ' + state.lineDiff.typed +
-              '  <span class="exp">정답: ' + state.lineDiff.expected + "</span></div>";
+            html += '<div class="diff-row">입력: ' + state.lineDiff.typed +
+              '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>' +
+              '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
           }
         }
         if (!state.lines.length) {
@@ -1337,6 +1716,72 @@
             }
             startClock();
           });
+        }
+      }
+
+      /* Tab 단독 키로 현재 빈칸/줄 스킵 */
+      function skipCurrentStep() {
+        if (state.finished) return;
+        startClock();
+        playClick(false);
+
+        if (state.mode === 1 || state.mode === 2) {
+          if (state.index >= state.source.length) return;
+          // 현재 위치가 빈칸(블라인드)이면 해당 빈칸 끝까지 자동 완성, 아니면 현재 단어/줄 스킵
+          if (state.mode === 2 && state.charMask[state.index]) {
+            while (state.index < state.source.length && state.charMask[state.index]) {
+              state.flags[state.index] = 1;
+              state.index += 1;
+            }
+          } else {
+            while (state.index < state.source.length && state.source[state.index] !== "\n") {
+              state.flags[state.index] = 1;
+              state.index += 1;
+            }
+            if (state.index < state.source.length && state.source[state.index] === "\n") {
+              state.flags[state.index] = 1;
+              state.index = afterNewline(state.index + 1);
+            }
+          }
+          if (state.index >= state.source.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+          render();
+          updateStats();
+          return;
+        }
+
+        if (state.mode === 3) {
+          if (!state.blankOrder.length) return;
+          state.blankPos += 1;
+          state.blankTyped = "";
+          if (state.blankPos >= state.blankOrder.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+          render();
+          updateStats();
+          return;
+        }
+
+        if (state.mode === 4) {
+          state.lineError = false;
+          state.lineDiff = null;
+          state.lineText = "";
+          state.lineIndex += 1;
+          if (state.lineIndex >= state.lines.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+          render();
+          updateStats();
         }
       }
 
@@ -1438,10 +1883,30 @@
         e.preventDefault();
         if (state.finished) return;
         startClock();
+
+        // 이미 오타가 뜬 상태에서 Enter를 한 번 더 누르면 맞춘 것으로 인정하고 다음 줄로 패스
+        if (state.lineError) {
+          state.lineError = false;
+          state.lineDiff = null;
+          state.lineText = "";
+          state.lineIndex += 1;
+          playClick(false);
+          if (state.lineIndex >= state.lines.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+          render();
+          return;
+        }
+
         const orig = state.lines[state.lineIndex] || "";
         const indent = leadingWs(orig);
         const assembled = indent + state.lineText;
-        if (assembled.replace(/[ \t]+$/g, "") === orig.replace(/[ \t]+$/g, "")) {
+
+        // 포인터(*), 연산자, 괄호 주변 공백 차이를 무시하고 비교
+        if (normalizeCodeLine(assembled) === normalizeCodeLine(orig)) {
           const typedLen = state.lineText.length;
           state.keyCorrect += Math.max(1, typedLen);
           state.lineError = false;
@@ -1481,11 +1946,13 @@
         if (e.key === "Tab") {
           e.preventDefault();
           state.tabHeld = true;
+          state.tabComboUsed = false;
           return;
         }
 
         if (e.key === "Enter" && state.tabHeld) {
           e.preventDefault();
+          state.tabComboUsed = true;
           restart();
           return;
         }
@@ -1500,13 +1967,20 @@
       }
 
       function onKeyUp(e) {
-        if (e.key === "Tab") state.tabHeld = false;
+        if (e.key === "Tab") {
+          const shouldSkip = state.tabHeld && !state.tabComboUsed && !el.overlay.classList.contains("show");
+          state.tabHeld = false;
+          state.tabComboUsed = false;
+          if (shouldSkip) {
+            skipCurrentStep();
+          }
+        }
       }
 
       function openModal() {
         el.modalLangSelect.value = state.lang;
-        renderPresetButtons(state.lang);
         el.rawCode.value = state.raw;
+        renderPresetButtons(state.lang);
         el.overlay.classList.add("show");
         setTimeout(function () { el.rawCode.focus(); }, 30);
       }
@@ -1554,10 +2028,10 @@
 
       el.modalLangSelect.addEventListener("change", function () {
         const lang = el.modalLangSelect.value;
-        renderPresetButtons(lang);
         if (PRESETS[lang] && PRESETS[lang][0]) {
           el.rawCode.value = PRESETS[lang][0].code;
         }
+        renderPresetButtons(lang);
       });
 
       el.soundBtn.addEventListener("click", function () {
