@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MEMO TYPE — 코드 암기 전용 타자 연습기</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #323437;
+      --bg-elev: #2c2e31;
+      --bg-soft: #36383b;
+      --sub: #646669;
+      --sub-alt: #4b4d50;
+      --text: #d1d0c5;
+      --error: #ca4754;
+      --error-dim: #7e2a33;
+      --caret: #e2b714;
+      --caret-dim: rgba(226, 183, 20, 0.18);
+      --ok: #d1d0c5;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Noto Sans KR", "JetBrains Mono", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    button, textarea, input, select {
+      font-family: inherit;
+    }
+
+    .app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 28px 16px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 16px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--caret-dim);
+      color: var(--caret);
+      display: grid;
+      place-items: center;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 600;
+      font-size: 16px;
+    }
+
+    .brand h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--text);
+    }
+
+    .brand p {
+      font-size: 12px;
+      color: var(--sub);
+      margin-top: 2px;
+    }
+
+    .top-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .lang-select {
+      background: var(--bg-elev);
+      color: var(--caret);
+      border: 1px solid var(--sub-alt);
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .modes {
+      display: flex;
+      background: var(--bg-elev);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 2px;
+    }
+
+    .modes button {
+      border: 0;
+      background: transparent;
+      color: var(--sub);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .modes button:hover { color: var(--text); }
+    .modes button.active {
+      background: var(--bg-soft);
+      color: var(--caret);
+    }
+
+    .stats {
+      display: flex;
+      gap: 18px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      color: var(--sub);
+      width: 100%;
+      justify-content: center;
+      order: 5;
+      margin: 2px 0 6px;
+    }
+
+    .stats b {
+      color: var(--caret);
+      font-weight: 500;
+      margin-left: 6px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 0;
+      background: var(--bg-elev);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover { color: var(--caret); }
+    .btn.ghost { color: var(--sub); }
+    .btn.active-toggle {
+      color: var(--caret);
+      background: var(--caret-dim);
+    }
+
+    .workspace {
+      flex: 1;
+      min-height: 0;
+      background: var(--bg-elev);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 40px var(--shadow);
+    }
+
+    .code-scroll {
+      height: 100%;
+      overflow: auto;
+      padding: 28px 22px 180px 18px;
+      outline: none;
+      scroll-behavior: smooth;
+    }
+
+    .code-scroll:focus { outline: none; }
+
+    .code {
+      font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+      font-size: 16px;
+      line-height: 1.7;
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0, "calt" 0;
+      white-space: pre;
+      tab-size: 4;
+    }
+
+    .line {
+      display: flex;
+      min-height: 27.2px;
+      align-items: flex-start;
+    }
+
+    .ln {
+      width: 46px;
+      flex: 0 0 46px;
+      text-align: right;
+      padding-right: 16px;
+      color: var(--sub-alt);
+      user-select: none;
+      font-size: 12px;
+      line-height: 1.7;
+      padding-top: 2px;
+    }
+
+    .src {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ch { color: var(--sub); }
+    .ch.ok { color: var(--text); }
+    .ch.bad { color: var(--error); background: var(--error-dim); }
+    .ch.blind {
+      color: transparent;
+      border-bottom: 2px solid var(--sub-alt);
+    }
+    .ch.blind.caret {
+      border-bottom: 2px solid var(--caret);
+    }
+    .ch.caret {
+      box-shadow: inset 0 -2px 0 var(--caret);
+      animation: blink 1s step-end infinite;
+    }
+    .ch.ok.caret, .ch.bad.caret {
+      box-shadow: inset 0 -2px 0 var(--caret);
+    }
+
+    @keyframes blink {
+      50% { box-shadow: inset 0 -2px 0 transparent; }
+    }
+
+    .tok.given { color: var(--sub); }
+    .tok.done { color: var(--text); }
+    .tok.blank {
+      display: inline-block;
+      min-width: 2ch;
+      border-bottom: 2px solid var(--sub-alt);
+      color: var(--text);
+      padding: 0 1px;
+      margin: 0 1px;
+    }
+    .tok.blank.current {
+      border-bottom-color: var(--caret);
+      background: var(--caret-dim);
+    }
+    .tok.blank.waiting {
+      color: transparent;
+      text-shadow: none;
+    }
+    .tok.blank .bad { color: var(--error); }
+    .inline-caret {
+      display: inline-block;
+      width: 2px;
+      height: 1.05em;
+      background: var(--caret);
+      vertical-align: text-bottom;
+      margin: 0 1px -2px;
+      animation: caretBlink 1s step-end infinite;
+    }
+    @keyframes caretBlink {
+      50% { background: transparent; }
+    }
+
+    .m3-input-wrap {
+      display: flex;
+      align-items: stretch;
+    }
+    .m3-indent {
+      color: var(--sub-alt);
+    }
+    .m3-field {
+      flex: 1;
+      background: transparent;
+      border: 0;
+      color: var(--text);
+      font: inherit;
+      outline: none;
+      width: 100%;
+      caret-color: var(--caret);
+      white-space: pre;
+    }
+    .m3-field::placeholder {
+      color: var(--sub-alt);
+      opacity: 1;
+    }
+    .line.current-line .src {
+      background: rgba(226, 183, 20, 0.07);
+      border-radius: 4px;
+      box-shadow: inset 3px 0 0 var(--caret);
+    }
+    .line.error-line .src {
+      background: rgba(202, 71, 84, 0.12);
+      border-radius: 4px;
+    }
+    .line.done-line .src { color: var(--text); }
+    .diff-row {
+      font-size: 12px;
+      color: var(--error);
+      padding-left: 46px;
+      margin: 2px 0 8px;
+      white-space: pre-wrap;
+    }
+    .diff-row .exp { color: var(--caret); }
+
+    .finish {
+      position: absolute;
+      inset: 0;
+      background: rgba(44, 46, 49, 0.96);
+      display: none;
+      place-items: center;
+      text-align: center;
+      z-index: 5;
+    }
+    .finish.show { display: grid; }
+    .finish h2 {
+      font-size: 28px;
+      color: var(--caret);
+      margin-bottom: 8px;
+      letter-spacing: 0.12em;
+    }
+    .finish p { color: var(--sub); margin-bottom: 22px; }
+    .finish-stats {
+      display: flex;
+      gap: 28px;
+      justify-content: center;
+      margin-bottom: 28px;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .finish-stats div { color: var(--sub); font-size: 12px; }
+    .finish-stats b {
+      display: block;
+      color: var(--text);
+      font-size: 28px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+    .finish .btn { padding: 10px 16px; font-size: 13px; }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-top: 14px;
+      color: var(--sub);
+      font-size: 12px;
+    }
+    kbd {
+      font-family: "JetBrains Mono", monospace;
+      background: var(--bg-elev);
+      border-radius: 4px;
+      padding: 2px 6px;
+      color: var(--text);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      place-items: center;
+      z-index: 20;
+      padding: 24px;
+    }
+    .overlay.show { display: grid; }
+    .modal {
+      width: min(920px, 100%);
+      background: #2b2d30;
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .modal h2 { font-size: 18px; }
+    .modal .note {
+      color: var(--sub);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .preset-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    textarea#rawCode {
+      width: 100%;
+      height: 350px;
+      resize: vertical;
+      background: #232528;
+      color: var(--text);
+      border: 1px solid #3c3f43;
+      border-radius: 10px;
+      padding: 14px;
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      font-variant-ligatures: none;
+      outline: none;
+    }
+    textarea#rawCode:focus { border-color: var(--caret); }
+    .modal-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .btn.primary {
+      background: var(--caret);
+      color: #1f1f1f;
+      font-weight: 600;
+    }
+    .btn.primary:hover { filter: brightness(1.05); color: #1f1f1f; }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #4c4f53; border-radius: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    @media (max-width: 860px) {
+      .app { padding: 14px; }
+      .stats { width: 100%; justify-content: space-between; }
+      .code { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo-mark">M</div>
+        <div>
+          <h1>MEMO TYPE</h1>
+          <p>코드 암기 전용 타자 연습기</p>
+        </div>
+      </div>
+
+      <div class="top-controls">
+        <select id="langSelect" class="lang-select" title="언어 선택">
+          <option value="c">C</option>
+          <option value="cpp">C++</option>
+          <option value="java">Java</option>
+          <option value="python">Python</option>
+        </select>
+
+        <div class="modes" role="tablist">
+          <button type="button" data-mode="1" class="active">따라치기</button>
+          <button type="button" data-mode="2">따라치기+빈칸</button>
+          <button type="button" data-mode="3">빈칸만 채우기</button>
+          <button type="button" data-mode="4">백지 암기</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <span>언어<b id="statLang">C</b></span>
+        <span>WPM<b id="statWpm">0</b></span>
+        <span>정확도<b id="statAcc">100%</b></span>
+        <span>진행도<b id="statProg">0%</b></span>
+        <span>오타<b id="statErr">0</b></span>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" id="hintBtn" hidden>힌트 보기</button>
+        <button type="button" class="btn active-toggle" id="soundBtn">타건음 ON</button>
+        <button type="button" class="btn" id="restartBtn">재시작</button>
+        <button type="button" class="btn primary" id="openModalBtn">코드 입력 / 프리셋</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <div class="code-scroll" id="board" tabindex="0"></div>
+      <div class="finish" id="finish">
+        <div>
+          <h2>COMPLETE</h2>
+          <p>이 코드를 손끝으로 완벽히 외웠습니다.</p>
+          <div class="finish-stats">
+            <div>WPM<b id="finWpm">0</b></div>
+            <div>정확도<b id="finAcc">100%</b></div>
+            <div>오타<b id="finErr">0</b></div>
+          </div>
+          <button type="button" class="btn primary" id="againBtn">다시 연습</button>
+          <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <div>
+        <kbd>Tab</kbd> + <kbd>Enter</kbd> 재시작
+        &nbsp;·&nbsp;
+        <kbd>Esc</kbd> 코드 입력 및 프리셋
+      </div>
+      <div>주석 자동 제거 · 스마트 들여쓰기 · 브라우저 자동 저장</div>
+    </footer>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal" role="dialog" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">코드 입력 및 프리셋 선택</h2>
+        <select id="modalLangSelect" class="lang-select">
+          <option value="c">C</option>
+          <option value="cpp">C++</option>
+          <option value="java">Java</option>
+          <option value="python">Python</option>
+        </select>
+      </div>
+      <p class="note">프리셋을 고르거나 연습할 코드를 붙여넣으세요. 언어별 주석(<code>//</code>, <code>/* */</code>, Python <code>#</code>)은 자동으로 제거되고 브라우저에 자동 저장됩니다.</p>
+      <div class="preset-bar" id="presetBar"></div>
+      <textarea id="rawCode" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <span style="color: var(--sub); font-size: 12px; align-self: center;">* 작성한 코드는 이 브라우저에 자동 저장됩니다.</span>
+        <div>
+          <button type="button" class="btn" id="closeModalBtn">닫기</button>
+          <button type="button" class="btn primary" id="startBtn">연습 시작</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "memotype_state_v1";
+
+      const KEYWORDS = {
+        c: new Set([
+          "auto","break","case","char","const","continue","default","do","double",
+          "else","enum","extern","float","for","goto","if","inline","int","long",
+          "register","restrict","return","short","signed","sizeof","static","struct",
+          "switch","typedef","union","unsigned","void","volatile","while","NULL",
+          "true","false","Element","Boolean","Stack","Queue","StackNode","QueueNode","malloc","free"
+        ]),
+        cpp: new Set([
+          "auto","break","case","catch","class","const","constexpr","continue","default",
+          "delete","do","double","else","enum","explicit","export","extern","false",
+          "float","for","friend","goto","if","inline","int","long","Mutable","namespace",
+          "new","noexcept","nullptr","operator","private","protected","public","return",
+          "short","signed","sizeof","static","struct","switch","template","this","throw",
+          "true","try","typedef","typename","union","unsigned","using","virtual","void",
+          "volatile","while","vector","stack","queue","string","cout","cin","endl","std"
+        ]),
+        java: new Set([
+          "abstract","assert","boolean","break","byte","case","catch","char","class",
+          "const","continue","default","do","double","else","enum","extends","final",
+          "finally","float","for","if","implements","import","instanceof","int",
+          "interface","long","native","new","null","package","private","protected",
+          "public","return","short","static","strictfp","super","switch","synchronized",
+          "this","throw","throws","transient","true","false","try","void","volatile",
+          "while","String","System","out","println","ArrayList","LinkedList","Queue","Stack"
+        ]),
+        python: new Set([
+          "False","None","True","and","as","assert","async","await","break","class",
+          "continue","def","del","elif","else","except","finally","for","from","global",
+          "if","import","in","is","lambda","nonlocal","not","or","pass","raise",
+          "return","try","while","with","yield","self","len","range","append","pop","print"
+        ])
+      };
+
+      const PRESETS = {
+        c: [
+          {
+            title: "C 원형 큐 (Array)",
+            code: [
+              "#include <stdio.h>",
+              "#include <stdlib.h>",
+              "",
+              "typedef int Element;",
+              "typedef int Boolean;",
+              "",
+              "typedef struct {",
+              "    Element *queue;",
+              "    int size;",
+              "    int front, rear;",
+              "} Queue;",
+              "",
+              "Queue* CreateQueue(int size)",
+              "{",
+              "    Queue *pQueue = (Queue *)malloc(sizeof(Queue));",
+              "    if(pQueue == NULL)",
+              "        return NULL;",
+              "    pQueue->queue = (Element *)malloc(size * sizeof(Element));",
+              "    if(pQueue->queue == NULL){",
+              "        free(pQueue);",
+              "        return NULL;",
+              "    }",
+              "    pQueue->size = size;",
+              "    pQueue->front = pQueue->rear = 0;",
+              "    return pQueue;",
+              "}",
+              "",
+              "void Enqueue(Queue *q, Element item)",
+              "{",
+              "    if((q->rear + 1) % q->size == q->front)",
+              "        return;",
+              "    q->rear = (q->rear + 1) % q->size;",
+              "    q->queue[q->rear] = item;",
+              "}",
+              "",
+              "Element Dequeue(Queue *q)",
+              "{",
+              "    if(q->front == q->rear)",
+              "        return 0;",
+              "    q->front = (q->front + 1) % q->size;",
+              "    return q->queue[q->front];",
+              "}"
+            ].join("\n")
+          },
+          {
+            title: "C 연결 리스트 스택 (Link)",
+            code: [
+              "#include <stdio.h>",
+              "#include <stdlib.h>",
+              "",
+              "typedef int Element;",
+              "typedef int Boolean;",
+              "",
+              "typedef struct tStackNode {",
+              "    Element data;",
+              "    struct tStackNode *next;",
+              "} StackNode;",
+              "",
+              "typedef struct {",
+              "    int count;",
+              "    StackNode *top;",
+              "} Stack;",
+              "",
+              "Stack* CreateStack(int size)",
+              "{",
+              "    Stack *pStack = (Stack *)malloc(sizeof(Stack));",
+              "    if(pStack == NULL)",
+              "        return NULL;",
+              "    pStack->count = 0;",
+              "    pStack->top = NULL;",
+              "    return pStack;",
+              "}",
+              "",
+              "void Push(Stack *pStack, Element item)",
+              "{",
+              "    StackNode *pNewNode = (StackNode *)malloc(sizeof(StackNode));",
+              "    if(pNewNode == NULL)",
+              "        return;",
+              "    pNewNode->data = item;",
+              "    pNewNode->next = pStack->top;",
+              "    pStack->top = pNewNode;",
+              "    pStack->count++;",
+              "}",
+              "",
+              "Element Pop(Stack *pStack)",
+              "{",
+              "    if(pStack->top == NULL)",
+              "        return 0;",
+              "    StackNode *dltPtr = pStack->top;",
+              "    Element item = dltPtr->data;",
+              "    pStack->top = dltPtr->next;",
+              "    free(dltPtr);",
+              "    pStack->count--;",
+              "    return item;",
+              "}"
+            ].join("\n")
+          }
+        ],
+        cpp: [
+          {
+            title: "C++ BFS 탐색 (Queue)",
+            code: [
+              "#include <iostream>",
+              "#include <vector>",
+              "#include <queue>",
+              "using namespace std;",
+              "",
+              "void bfs(int start, const vector<vector<int>>& graph, vector<bool>& visited) {",
+              "    queue<int> q;",
+              "    q.push(start);",
+              "    visited[start] = true;",
+              "",
+              "    while (!q.empty()) {",
+              "        int cur = q.front();",
+              "        q.pop();",
+              "        cout << cur << \" \";",
+              "",
+              "        for (int next : graph[cur]) {",
+              "            if (!visited[next]) {",
+              "                visited[next] = true;",
+              "                q.push(next);",
+              "            }",
+              "        }",
+              "    }",
+              "}"
+            ].join("\n")
+          }
+        ],
+        java: [
+          {
+            title: "Java 이진 탐색 (Binary Search)",
+            code: [
+              "public class BinarySearch {",
+              "    public static int binarySearch(int[] arr, int target) {",
+              "        int left = 0;",
+              "        int right = arr.length - 1;",
+              "",
+              "        while (left <= right) {",
+              "            int mid = left + (right - left) / 2;",
+              "            if (arr[mid] == target) {",
+              "                return mid;",
+              "            }",
+              "            if (arr[mid] < target) {",
+              "                left = mid + 1;",
+              "            } else {",
+              "                right = mid - 1;",
+              "            }",
+              "        }",
+              "        return -1;",
+              "    }",
+              "}"
+            ].join("\n")
+          }
+        ],
+        python: [
+          {
+            title: "Python 퀵 정렬 (Quick Sort)",
+            code: [
+              "def quick_sort(arr):",
+              "    if len(arr) <= 1:",
+              "        return arr",
+              "    pivot = arr[len(arr) // 2]",
+              "    left = [x for x in arr if x < pivot]",
+              "    middle = [x for x in arr if x == pivot]",
+              "    right = [x for x in arr if x > pivot]",
+              "    return quick_sort(left) + middle + quick_sort(right)",
+              "",
+              "data = [3, 6, 8, 10, 1, 2, 1]",
+              "print(quick_sort(data))"
+            ].join("\n")
+          }
+        ]
+      };
+
+      const el = {
+        overlay: document.getElementById("overlay"),
+        rawCode: document.getElementById("rawCode"),
+        board: document.getElementById("board"),
+        finish: document.getElementById("finish"),
+        hintBtn: document.getElementById("hintBtn"),
+        soundBtn: document.getElementById("soundBtn"),
+        langSelect: document.getElementById("langSelect"),
+        modalLangSelect: document.getElementById("modalLangSelect"),
+        presetBar: document.getElementById("presetBar"),
+        statLang: document.getElementById("statLang"),
+        statWpm: document.getElementById("statWpm"),
+        statAcc: document.getElementById("statAcc"),
+        statProg: document.getElementById("statProg"),
+        statErr: document.getElementById("statErr"),
+        finWpm: document.getElementById("finWpm"),
+        finAcc: document.getElementById("finAcc"),
+        finErr: document.getElementById("finErr")
+      };
+
+      const state = {
+        lang: "c",
+        mode: 1,
+        sound: true,
+        raw: PRESETS.c[0].code,
+        source: "",
+        lines: [],
+        startedAt: null,
+        finished: false,
+        keyCorrect: 0,
+        keyWrong: 0,
+        tabHeld: false,
+        showHint: false,
+        index: 0,
+        flags: [],
+        charMask: [],
+        tokens: [],
+        blankSet: new Set(),
+        blankOrder: [],
+        blankPos: 0,
+        blankTyped: "",
+        lineIndex: 0,
+        lineText: "",
+        lineError: false,
+        lineDiff: null
+      };
+
+      /* Web Audio API 합성 타건음 */
+      let audioCtx = null;
+      function playClick(isError) {
+        if (!state.sound) return;
+        try {
+          if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+          }
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          if (isError) {
+            osc.type = "sawtooth";
+            osc.frequency.setValueAtTime(160, now);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          } else {
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(620, now);
+            osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.025);
+          }
+        } catch (e) {}
+      }
+
+      function saveSettings() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            lang: state.lang,
+            mode: state.mode,
+            sound: state.sound,
+            raw: state.raw
+          }));
+        } catch (e) {}
+      }
+
+      function loadSettings() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (!saved) return;
+          const parsed = JSON.parse(saved);
+          if (parsed.lang && KEYWORDS[parsed.lang]) state.lang = parsed.lang;
+          if (parsed.mode >= 1 && parsed.mode <= 4) state.mode = parsed.mode;
+          if (typeof parsed.sound === "boolean") state.sound = parsed.sound;
+          if (typeof parsed.raw === "string" && parsed.raw.trim()) state.raw = parsed.raw;
+        } catch (e) {}
+      }
+
+      function esc(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function stripCommentsByLang(src, lang) {
+        if (lang === "python") {
+          let out = "";
+          let i = 0;
+          const n = src.length;
+          while (i < n) {
+            if (src.slice(i, i + 3) === '"""' || src.slice(i, i + 3) === "'''") {
+              const q = src.slice(i, i + 3);
+              i += 3;
+              while (i < n && src.slice(i, i + 3) !== q) i += 1;
+              i += 3;
+              continue;
+            }
+            const ch = src[i];
+            if (ch === '"' || ch === "'") {
+              out += ch;
+              i += 1;
+              while (i < n) {
+                if (src[i] === "\\" && i + 1 < n) {
+                  out += src[i] + src[i + 1];
+                  i += 2;
+                  continue;
+                }
+                out += src[i];
+                if (src[i] === ch) { i += 1; break; }
+                i += 1;
+              }
+              continue;
+            }
+            if (ch === "#") {
+              while (i < n && src[i] !== "\n") i += 1;
+              continue;
+            }
+            out += ch;
+            i += 1;
+          }
+          return out;
+        }
+
+        let out = "";
+        let i = 0;
+        const n = src.length;
+        while (i < n) {
+          const ch = src[i];
+          const next = src[i + 1];
+          if (ch === '"' || ch === "'") {
+            const quote = ch;
+            out += quote;
+            i += 1;
+            while (i < n) {
+              if (src[i] === "\\" && i + 1 < n) {
+                out += src[i] + src[i + 1];
+                i += 2;
+                continue;
+              }
+              out += src[i];
+              if (src[i] === quote) { i += 1; break; }
+              i += 1;
+            }
+            continue;
+          }
+          if (ch === "/" && next === "/") {
+            i += 2;
+            while (i < n && src[i] !== "\n") i += 1;
+            continue;
+          }
+          if (ch === "/" && next === "*") {
+            i += 2;
+            while (i + 1 < n && !(src[i] === "*" && src[i + 1] === "/")) i += 1;
+            if (i + 1 < n) i += 2;
+            out += " ";
+            continue;
+          }
+          out += ch;
+          i += 1;
+        }
+        return out;
+      }
+
+      function preprocess(raw, lang) {
+        let code = String(raw || "").replace(/\r\n/g, "\n").replace(/\t/g, "    ");
+        code = stripCommentsByLang(code, lang);
+        const lines = code.split("\n").map(function (line) {
+          return line.replace(/[ \t]+$/g, "");
+        });
+        const compact = [];
+        let empty = 0;
+        for (let i = 0; i < lines.length; i += 1) {
+          if (lines[i] === "") {
+            empty += 1;
+            if (empty <= 1) compact.push("");
+          } else {
+            empty = 0;
+            compact.push(lines[i]);
+          }
+        }
+        while (compact.length && compact[0] === "") compact.shift();
+        while (compact.length && compact[compact.length - 1] === "") compact.pop();
+        return compact.join("\n");
+      }
+
+      function leadingWs(line) {
+        const m = String(line).match(/^[ ]*/);
+        return m ? m[0] : "";
+      }
+
+      function isHideable(text) {
+        if (!text || /^\s+$/.test(text)) return false;
+        if (/^["']/.test(text)) return false;
+        if (/^[;,.{}()[\]:#?~]$/.test(text)) return false;
+        if (text === "\\" || text === "...") return false;
+        const kwSet = KEYWORDS[state.lang] || KEYWORDS.c;
+        if (kwSet.has(text)) return true;
+        if (/^[_A-Za-z]\w*$/.test(text)) return true;
+        if (/^\d+(?:\.\d+)?$/.test(text)) return true;
+        if (text === "*" || text === "&" || text === "->" || text === "++" || text === "--") return true;
+        if (/^(==|!=|<=|>=|&&|\|\||!|%|\+|\-|\*|\/|\/\/)$/.test(text)) return true;
+        return false;
+      }
+
+      function tokenize(source) {
+        const re = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])+'|#include\b|#define\b|#ifn?def\b|#if\b|#endif\b|#pragma\b|->|<<|>>|&&|\|\||==|!=|<=|>=|\+\+|--|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\/\/|\.\.\.|[_A-Za-z]\w*|\d+(?:\.\d+)?|\s+|.)/g;
+        const tokens = [];
+        let m;
+        while ((m = re.exec(source))) {
+          const text = m[0];
+          tokens.push({
+            text: text,
+            start: m.index,
+            end: m.index + text.length,
+            hideable: isHideable(text)
+          });
+        }
+        return tokens;
+      }
+
+      function pickBlanks(tokens) {
+        const idxs = [];
+        for (let i = 0; i < tokens.length; i += 1) {
+          if (tokens[i].hideable) idxs.push(i);
+        }
+        const ratio = 0.3;
+        const n = Math.max(1, Math.round(idxs.length * ratio));
+        for (let i = idxs.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = idxs[i];
+          idxs[i] = idxs[j];
+          idxs[j] = tmp;
+        }
+        const chosen = idxs.slice(0, Math.min(n, idxs.length)).sort(function (a, b) { return a - b; });
+        return new Set(chosen);
+      }
+
+      function skipIndent(from) {
+        let i = from;
+        const s = state.source;
+        while (i < s.length && s[i] === " ") {
+          state.flags[i] = 1;
+          i += 1;
+        }
+        return i;
+      }
+
+      function afterNewline(index) {
+        if (index > 0 && state.source[index - 1] === "\n") {
+          return skipIndent(index);
+        }
+        return index;
+      }
+
+      function syncUIFromState() {
+        el.langSelect.value = state.lang;
+        el.modalLangSelect.value = state.lang;
+        el.statLang.textContent = state.lang.toUpperCase();
+        el.soundBtn.textContent = state.sound ? "타건음 ON" : "타건음 OFF";
+        el.soundBtn.classList.toggle("active-toggle", state.sound);
+        document.querySelectorAll(".modes button").forEach(function (btn) {
+          btn.classList.toggle("active", Number(btn.getAttribute("data-mode")) === state.mode);
+        });
+      }
+
+      function renderPresetButtons(lang) {
+        const list = PRESETS[lang] || [];
+        el.presetBar.innerHTML = "";
+        list.forEach(function (item) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn";
+          btn.textContent = "프리셋: " + item.title;
+          btn.addEventListener("click", function () {
+            el.rawCode.value = item.code;
+            el.rawCode.focus();
+          });
+          el.presetBar.appendChild(btn);
+        });
+      }
+
+      function resetPractice(keepBlanks) {
+        syncUIFromState();
+        state.source = preprocess(state.raw, state.lang);
+        state.lines = state.source.length ? state.source.split("\n") : [];
+        state.startedAt = null;
+        state.finished = false;
+        state.keyCorrect = 0;
+        state.keyWrong = 0;
+        state.showHint = false;
+        state.index = 0;
+        state.flags = new Array(state.source.length).fill(0);
+        state.charMask = new Array(state.source.length).fill(false);
+        state.lineIndex = 0;
+        state.lineText = "";
+        state.lineError = false;
+        state.lineDiff = null;
+        state.blankTyped = "";
+        state.blankPos = 0;
+        el.finish.classList.remove("show");
+        el.hintBtn.classList.toggle("active-toggle", false);
+        el.hintBtn.textContent = "힌트 보기";
+
+        if (!keepBlanks) {
+          state.tokens = tokenize(state.source);
+          state.blankSet = pickBlanks(state.tokens);
+        }
+        state.blankOrder = [];
+        for (let i = 0; i < state.tokens.length; i += 1) {
+          if (state.blankSet.has(i)) {
+            state.blankOrder.push(i);
+            const tok = state.tokens[i];
+            for (let c = tok.start; c < tok.end; c += 1) {
+              state.charMask[c] = true;
+            }
+          }
+        }
+
+        if (state.mode === 1 || state.mode === 2) {
+          state.index = skipIndent(0);
+        }
+        saveSettings();
+        render();
+        updateStats();
+        el.board.focus();
+      }
+
+      function startClock() {
+        if (!state.startedAt && !state.finished) {
+          state.startedAt = Date.now();
+        }
+      }
+
+      function progressValue() {
+        if (state.mode === 1 || state.mode === 2) {
+          if (!state.source.length) return 0;
+          return state.index / state.source.length;
+        }
+        if (state.mode === 3) {
+          if (!state.blankOrder.length) return 0;
+          return state.blankPos / state.blankOrder.length;
+        }
+        if (!state.lines.length) return 0;
+        return state.lineIndex / state.lines.length;
+      }
+
+      function accuracyValue() {
+        const total = state.keyCorrect + state.keyWrong;
+        if (!total) return 100;
+        return Math.max(0, Math.round((state.keyCorrect / total) * 1000) / 10);
+      }
+
+      function wpmValue() {
+        if (!state.startedAt) return 0;
+        const minutes = (Date.now() - state.startedAt) / 60000;
+        if (minutes <= 0) return 0;
+        return Math.round((state.keyCorrect / 5) / minutes);
+      }
+
+      function updateStats() {
+        const acc = accuracyValue();
+        const wpm = wpmValue();
+        const prog = Math.min(100, Math.round(progressValue() * 1000) / 10);
+        el.statWpm.textContent = String(wpm);
+        el.statAcc.textContent = acc + "%";
+        el.statProg.textContent = prog + "%";
+        el.statErr.textContent = String(state.keyWrong);
+      }
+
+      function complete() {
+        state.finished = true;
+        updateStats();
+        el.finWpm.textContent = String(wpmValue());
+        el.finAcc.textContent = accuracyValue() + "%";
+        el.finErr.textContent = String(state.keyWrong);
+        el.finish.classList.add("show");
+      }
+
+      function render() {
+        el.hintBtn.hidden = state.mode !== 4;
+        if (state.mode === 1 || state.mode === 2) renderTypingMode(state.mode === 2);
+        else if (state.mode === 3) renderMode3();
+        else renderMode4();
+        requestAnimationFrame(scrollCaret);
+      }
+
+      function scrollCaret() {
+        const target = el.board.querySelector(".ch.caret, .inline-caret, .line.current-line");
+        if (target) {
+          const boardRect = el.board.getBoundingClientRect();
+          const targetRect = target.getBoundingClientRect();
+          const targetRelativeTop = targetRect.top - boardRect.top + el.board.scrollTop;
+          const targetScrollTop = targetRelativeTop - (el.board.clientHeight * 0.35);
+          el.board.scrollTop = Math.max(0, targetScrollTop);
+        }
+      }
+
+      function renderTypingMode(isMasked) {
+        const src = state.source;
+        const lines = src.split("\n");
+        let pos = 0;
+        let html = '<div class="code">';
+        for (let li = 0; li < lines.length; li += 1) {
+          const line = lines[li];
+          html += '<div class="line"><span class="ln">' + (li + 1) + '</span><span class="src">';
+          for (let ci = 0; ci <= line.length; ci += 1) {
+            if (ci === line.length) {
+              if (li < lines.length - 1) {
+                const cls = ["ch"];
+                if (state.flags[pos] === 1) cls.push("ok");
+                if (state.flags[pos] === 2) cls.push("bad");
+                if (pos === state.index) cls.push("caret");
+                html += '<span class="' + cls.join(" ") + '"> </span>';
+                pos += 1;
+              }
+              break;
+            }
+            const cls = ["ch"];
+            const isDone = state.flags[pos] === 1;
+            const isErr = state.flags[pos] === 2;
+            const isBlind = isMasked && state.charMask[pos] && !isDone;
+
+            if (isDone) cls.push("ok");
+            if (isErr) cls.push("bad");
+            if (isBlind) cls.push("blind");
+            if (pos === state.index) cls.push("caret");
+
+            const displayChar = (isBlind && !isErr) ? "_" : esc(line[ci]);
+            html += '<span class="' + cls.join(" ") + '">' + displayChar + "</span>";
+            pos += 1;
+          }
+          html += "</span></div>";
+        }
+        if (!src.length) {
+          html += '<div class="line"><span class="ln">1</span><span class="src ch">코드를 입력하세요</span></div>';
+        }
+        html += "</div>";
+        el.board.innerHTML = html;
+      }
+
+      function renderMode3() {
+        const tokens = state.tokens;
+        const currentBlank = state.blankOrder[state.blankPos];
+        let html = '<div class="code"><div class="line"><span class="ln">1</span><span class="src">';
+        let lineNo = 1;
+        for (let i = 0; i < tokens.length; i += 1) {
+          const tok = tokens[i];
+          const parts = tok.text.split("\n");
+          for (let p = 0; p < parts.length; p += 1) {
+            if (p > 0) {
+              lineNo += 1;
+              html += '</span></div><div class="line"><span class="ln">' + lineNo + '</span><span class="src">';
+            }
+            const piece = parts[p];
+            if (piece === "" && p < parts.length - 1) continue;
+            if (!state.blankSet.has(i)) {
+              html += '<span class="tok given">' + esc(piece) + "</span>";
+              continue;
+            }
+            const orderIdx = state.blankOrder.indexOf(i);
+            if (orderIdx < state.blankPos) {
+              html += '<span class="tok blank done">' + esc(piece) + "</span>";
+            } else if (i === currentBlank) {
+              const typed = state.blankTyped;
+              const expected = tok.text.replace(/\n/g, "");
+              let inner = "";
+              const vis = piece || expected;
+              const len = Math.max(vis.length, typed.length);
+              for (let c = 0; c < len; c += 1) {
+                if (c === typed.length) inner += '<span class="inline-caret"></span>';
+                if (c < typed.length) {
+                  const ok = typed[c] === expected[c];
+                  inner += '<span class="' + (ok ? "" : "bad") + '">' + esc(typed[c]) + "</span>";
+                } else if (c < vis.length) {
+                  inner += " ";
+                }
+              }
+              if (typed.length >= len) inner += '<span class="inline-caret"></span>';
+              html += '<span class="tok blank current">' + inner + "</span>";
+            } else {
+              const w = Math.max(3, piece.length);
+              html += '<span class="tok blank waiting">' + esc("_".repeat(w)) + "</span>";
+            }
+          }
+        }
+        html += "</span></div></div>";
+        el.board.innerHTML = html;
+      }
+
+      function renderMode4() {
+        let html = '<div class="code">';
+        for (let i = 0; i < state.lines.length; i += 1) {
+          const line = state.lines[i];
+          const indent = leadingWs(line);
+          let cls = "line";
+          if (i === state.lineIndex) cls += " current-line";
+          if (i === state.lineIndex && state.lineError) cls += " error-line";
+          if (i < state.lineIndex) cls += " done-line";
+          html += '<div class="' + cls + '"><span class="ln">' + (i + 1) + '</span><span class="src">';
+          if (i < state.lineIndex) {
+            html += esc(line);
+          } else if (i === state.lineIndex) {
+            html += '<span class="m3-input-wrap">';
+            html += '<span class="m3-indent">' + esc(indent) + "</span>";
+            html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" />';
+            html += "</span>";
+          } else {
+            html += "&nbsp;";
+          }
+          html += "</span></div>";
+          if (i === state.lineIndex && state.lineError && state.lineDiff) {
+            html += '<div class="diff-row">오타: ' + state.lineDiff.typed +
+              '  <span class="exp">정답: ' + state.lineDiff.expected + "</span></div>";
+          }
+        }
+        if (!state.lines.length) {
+          html += '<div class="line"><span class="ln">1</span><span class="src">코드를 입력하세요</span></div>';
+        }
+        html += "</div>";
+        el.board.innerHTML = html;
+        const field = document.getElementById("m3field");
+        if (field) {
+          field.value = state.lineText;
+          const cur = state.lines[state.lineIndex] || "";
+          const hint = cur.slice(leadingWs(cur).length);
+          field.placeholder = state.showHint ? hint : "";
+          field.focus();
+          field.addEventListener("input", function () {
+            state.lineText = field.value.replace(/\t/g, "    ");
+            playClick(false);
+            if (state.lineError) {
+              state.lineError = false;
+              state.lineDiff = null;
+              const wrap = field.closest(".line");
+              if (wrap) wrap.classList.remove("error-line");
+              const diff = el.board.querySelector(".diff-row");
+              if (diff) diff.remove();
+            }
+            startClock();
+          });
+        }
+      }
+
+      function handleTypingKey(e) {
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          if (state.index <= 0) return;
+          state.index -= 1;
+          state.flags[state.index] = 0;
+          while (state.index > 0 && wasAutoIndent(state.index - 1) && state.flags[state.index - 1] === 1) {
+            state.index -= 1;
+            state.flags[state.index] = 0;
+          }
+          playClick(false);
+          render();
+          return;
+        }
+
+        let ch = null;
+        if (e.key === "Enter") ch = "\n";
+        else if (e.key.length === 1) ch = e.key;
+        if (ch == null) return;
+        e.preventDefault();
+        if (state.index >= state.source.length) return;
+        startClock();
+        const expected = state.source[state.index];
+        if (ch === expected) {
+          state.flags[state.index] = 1;
+          state.keyCorrect += 1;
+          playClick(false);
+        } else {
+          state.flags[state.index] = 2;
+          state.keyWrong += 1;
+          playClick(true);
+        }
+        state.index += 1;
+        if (ch === "\n" && expected === "\n") {
+          state.index = afterNewline(state.index);
+        }
+        if (state.index >= state.source.length) {
+          render();
+          updateStats();
+          complete();
+          return;
+        }
+        render();
+      }
+
+      function wasAutoIndent(i) {
+        const s = state.source;
+        if (s[i] !== " ") return false;
+        let j = i;
+        while (j > 0 && s[j - 1] === " ") j -= 1;
+        return j === 0 || s[j - 1] === "\n";
+      }
+
+      function handleBlankOnlyKey(e) {
+        if (!state.blankOrder.length) return;
+        const tokIndex = state.blankOrder[state.blankPos];
+        const expected = state.tokens[tokIndex].text;
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          state.blankTyped = state.blankTyped.slice(0, -1);
+          playClick(false);
+          render();
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          return;
+        }
+        if (e.key.length !== 1) return;
+        e.preventDefault();
+        startClock();
+        const next = state.blankTyped + e.key;
+        if (e.key === expected[state.blankTyped.length]) {
+          state.keyCorrect += 1;
+          playClick(false);
+        } else {
+          state.keyWrong += 1;
+          playClick(true);
+        }
+        state.blankTyped = next;
+        if (state.blankTyped === expected) {
+          state.blankPos += 1;
+          state.blankTyped = "";
+          if (state.blankPos >= state.blankOrder.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+        }
+        render();
+      }
+
+      function handleBlindLineKey(e) {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        if (state.finished) return;
+        startClock();
+        const orig = state.lines[state.lineIndex] || "";
+        const indent = leadingWs(orig);
+        const assembled = indent + state.lineText;
+        if (assembled.replace(/[ \t]+$/g, "") === orig.replace(/[ \t]+$/g, "")) {
+          const typedLen = state.lineText.length;
+          state.keyCorrect += Math.max(1, typedLen);
+          state.lineError = false;
+          state.lineDiff = null;
+          state.lineText = "";
+          state.lineIndex += 1;
+          playClick(false);
+          if (state.lineIndex >= state.lines.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+          render();
+        } else {
+          state.keyWrong += 1;
+          state.lineError = true;
+          playClick(true);
+          state.lineDiff = {
+            typed: esc(assembled || "(빈 줄)"),
+            expected: esc(orig || "(빈 줄)")
+          };
+          render();
+        }
+      }
+
+      function onKeyDown(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          if (el.overlay.classList.contains("show")) closeModal();
+          else openModal();
+          return;
+        }
+
+        if (el.overlay.classList.contains("show")) return;
+
+        if (e.key === "Tab") {
+          e.preventDefault();
+          state.tabHeld = true;
+          return;
+        }
+
+        if (e.key === "Enter" && state.tabHeld) {
+          e.preventDefault();
+          restart();
+          return;
+        }
+
+        if (state.finished) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
+        else if (state.mode === 3) handleBlankOnlyKey(e);
+        else handleBlindLineKey(e);
+        updateStats();
+      }
+
+      function onKeyUp(e) {
+        if (e.key === "Tab") state.tabHeld = false;
+      }
+
+      function openModal() {
+        el.modalLangSelect.value = state.lang;
+        renderPresetButtons(state.lang);
+        el.rawCode.value = state.raw;
+        el.overlay.classList.add("show");
+        setTimeout(function () { el.rawCode.focus(); }, 30);
+      }
+
+      function closeModal() {
+        el.overlay.classList.remove("show");
+        el.board.focus();
+      }
+
+      function startFromModal() {
+        const raw = el.rawCode.value;
+        const lang = el.modalLangSelect.value;
+        const processed = preprocess(raw, lang);
+        if (!processed.trim()) {
+          el.rawCode.focus();
+          return;
+        }
+        state.lang = lang;
+        state.raw = raw;
+        closeModal();
+        resetPractice(false);
+      }
+
+      function restart() {
+        resetPractice(true);
+      }
+
+      function setMode(mode) {
+        state.mode = mode;
+        resetPractice(true);
+      }
+
+      document.querySelectorAll(".modes button").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          setMode(Number(btn.getAttribute("data-mode")));
+        });
+      });
+
+      el.langSelect.addEventListener("change", function () {
+        state.lang = el.langSelect.value;
+        const defaultPreset = (PRESETS[state.lang] && PRESETS[state.lang][0]) ? PRESETS[state.lang][0].code : "";
+        if (defaultPreset) state.raw = defaultPreset;
+        resetPractice(false);
+      });
+
+      el.modalLangSelect.addEventListener("change", function () {
+        const lang = el.modalLangSelect.value;
+        renderPresetButtons(lang);
+        if (PRESETS[lang] && PRESETS[lang][0]) {
+          el.rawCode.value = PRESETS[lang][0].code;
+        }
+      });
+
+      el.soundBtn.addEventListener("click", function () {
+        state.sound = !state.sound;
+        syncUIFromState();
+        saveSettings();
+        el.board.focus();
+      });
+
+      document.getElementById("openModalBtn").addEventListener("click", openModal);
+      document.getElementById("closeModalBtn").addEventListener("click", closeModal);
+      document.getElementById("startBtn").addEventListener("click", startFromModal);
+      document.getElementById("restartBtn").addEventListener("click", restart);
+      document.getElementById("againBtn").addEventListener("click", restart);
+      document.getElementById("finishEditBtn").addEventListener("click", openModal);
+
+      el.hintBtn.addEventListener("click", function () {
+        state.showHint = !state.showHint;
+        el.hintBtn.classList.toggle("active-toggle", state.showHint);
+        el.hintBtn.textContent = state.showHint ? "힌트 숨기기" : "힌트 보기";
+        render();
+      });
+
+      el.overlay.addEventListener("click", function (e) {
+        if (e.target === el.overlay) closeModal();
+      });
+
+      el.board.addEventListener("click", function () {
+        if (state.mode === 4) {
+          const field = document.getElementById("m3field");
+          if (field) field.focus();
+        } else {
+          el.board.focus();
+        }
+      });
+
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("keyup", onKeyUp);
+      setInterval(function () {
+        if (state.startedAt && !state.finished) updateStats();
+      }, 250);
+
+      loadSettings();
+      resetPractice(false);
+    })();
+  </script>
+</body>
+</html>
