@@ -98,7 +98,7 @@
       flex-wrap: wrap;
     }
 
-    .lang-select {
+    .lang-select, .snippet-select {
       background: var(--bg-elev);
       color: var(--caret);
       border: 1px solid var(--sub-alt);
@@ -109,6 +109,14 @@
       font-weight: 600;
       cursor: pointer;
       outline: none;
+    }
+
+    .snippet-select {
+      max-width: 240px;
+      color: var(--text);
+      font-family: "Noto Sans KR", sans-serif;
+      font-weight: 500;
+      text-overflow: ellipsis;
     }
 
     .modes, .diff-group {
@@ -459,6 +467,38 @@
       color: var(--text);
     }
 
+    .title-input {
+      width: 100%;
+      margin-bottom: 10px;
+      background: #232528;
+      color: var(--text);
+      border: 1px solid #3c3f43;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      outline: none;
+    }
+    .title-input:focus { border-color: var(--caret); }
+    .snippet-warn {
+      display: none;
+      color: var(--error);
+      font-size: 12px;
+      margin: 0 0 8px;
+    }
+    .snippet-warn.show { display: block; }
+    .modal-snippet-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .modal-snippet-row .snippet-select {
+      flex: 1;
+      min-width: 180px;
+      max-width: none;
+    }
+
     textarea#rawCode {
       width: 100%;
       height: 310px;
@@ -519,6 +559,10 @@
           <option value="python">Python</option>
         </select>
 
+        <select id="snippetSelect" class="snippet-select" title="저장된 코드"></select>
+        <button type="button" class="btn" id="newSnippetBtn">새 코드</button>
+        <button type="button" class="btn ghost" id="deleteSnippetBtn">삭제</button>
+
         <div class="modes" role="tablist">
           <button type="button" data-mode="1" class="active">따라치기</button>
           <button type="button" data-mode="2">따라치기+빈칸</button>
@@ -526,7 +570,6 @@
           <button type="button" data-mode="4">백지 암기</button>
         </div>
 
-        <!-- 빈칸 관련 모드(2, 3)에서만 노출되는 난이도 선택 버튼 -->
         <div class="diff-group" id="diffGroup" style="display: none;">
           <button type="button" data-diff="0.2">쉬움</button>
           <button type="button" data-diff="0.3" class="active">보통</button>
@@ -560,7 +603,6 @@
             <div>WPM<b id="finWpm">0</b></div>
             <div>정확도<b id="finAcc">100%</b></div>
             <div>오타<b id="finErr">0</b></div>
-            <div>스킵<b id="finSkip">0</b></div>
           </div>
           <button type="button" class="btn primary" id="againBtn">다시 연습</button>
           <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
@@ -591,13 +633,21 @@
           <option value="python">Python</option>
         </select>
       </div>
-      <p class="note">아래 목록에서 예시를 선택하거나 직접 연습할 코드를 붙여넣으세요. 주석은 시작 시 자동으로 제거됩니다.</p>
+      <p class="note">저장된 코드를 고르거나 제목과 본문을 입력해 이 브라우저(localStorage)에 보관하세요. 주석은 연습 시작 시 자동으로 제거됩니다.</p>
+      <div class="modal-snippet-row">
+        <select id="modalSnippetSelect" class="snippet-select" title="저장된 코드 목록"></select>
+        <button type="button" class="btn" id="modalNewBtn">새 코드 추가</button>
+        <button type="button" class="btn ghost" id="modalDeleteBtn">삭제</button>
+      </div>
       <div class="preset-grid" id="presetBar"></div>
-      <textarea id="rawCode" spellcheck="false"></textarea>
+      <input id="snippetTitle" class="title-input" type="text" maxlength="80" placeholder="코드 제목 (예: 연결 리스트 스택)" spellcheck="false" />
+      <p class="snippet-warn" id="snippetWarn">코드가 비어 있습니다. 본문을 입력한 뒤 저장하세요.</p>
+      <textarea id="rawCode" spellcheck="false" placeholder="연습할 코드 본문"></textarea>
       <div class="modal-actions">
-        <span style="color: var(--sub); font-size: 12px; align-self: center;">* 작성한 코드는 이 브라우저에 자동 저장됩니다.</span>
+        <span style="color: var(--sub); font-size: 12px; align-self: center;">* 목록은 typing_snippets 키로 이 브라우저에만 저장됩니다.</span>
         <div>
-          <button type="button" class="btn" id="closeModalBtn">닫기</button>
+          <button type="button" class="btn" id="cancelSnippetBtn">취소</button>
+          <button type="button" class="btn" id="saveSnippetBtn">저장</button>
           <button type="button" class="btn primary" id="startBtn">연습 시작</button>
         </div>
       </div>
@@ -606,7 +656,8 @@
 
   <script>
     (function () {
-      const STORAGE_KEY = "memotype_state_v3";
+      const STORAGE_KEY = "memotype_state_v5";
+      const SNIPPETS_KEY = "typing_snippets";
 
       const KEYWORDS = {
         c: new Set([
@@ -655,83 +706,45 @@
               "typedef int Boolean;",
               "",
               "typedef struct {",
-              "    Element* stack;",
+              "    Element *stack;",
               "    int size;",
               "    int top;",
               "} Stack;",
               "",
-              "Stack* CreateStack(int size)",
+              "Stack *CreateStack(int size)",
               "{",
-              "    Stack* pStack = (Stack*)malloc(sizeof(Stack));",
-              "    if (pStack == NULL)",
+              "    Stack *pStack = (Stack *)malloc(sizeof(Stack));",
+              "    if(pStack == NULL)",
               "        return NULL;",
-              "",
-              "    pStack->stack = (Element*)malloc(size * sizeof(Element));",
-              "    if (pStack->stack == NULL) {",
+              "    pStack->stack = (Element *)malloc(size * sizeof(Element));",
+              "    if(pStack->stack == NULL){",
               "        free(pStack);",
               "        return NULL;",
               "    }",
-              "",
               "    pStack->size = size;",
               "    pStack->top = -1;",
               "    return pStack;",
               "}",
               "",
-              "Boolean IsFullStack(Stack* pStack)",
+              "void Push(Stack *pStack, Element item)",
               "{",
-              "    if (pStack->top == pStack->size - 1)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "Boolean IsEmptyStack(Stack* pStack)",
-              "{",
-              "    if (pStack->top < 0)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "void Push(Stack* pStack, Element item)",
-              "{",
-              "    if (IsFullStack(pStack))",
+              "    if(pStack->top == pStack->size - 1)",
               "        return;",
-              "",
               "    pStack->stack[++pStack->top] = item;",
               "}",
               "",
-              "Element Pop(Stack* pStack)",
+              "Element Pop(Stack *pStack)",
               "{",
-              "    if (IsEmptyStack(pStack))",
+              "    if(pStack->top < 0)",
               "        return 0;",
-              "",
               "    return pStack->stack[pStack->top--];",
               "}",
               "",
-              "Element Top(Stack* pStack)",
+              "void DestroyStack(Stack *pStack)",
               "{",
-              "    if (IsEmptyStack(pStack))",
-              "        return 0;",
-              "",
-              "    return pStack->stack[pStack->top];",
-              "}",
-              "",
-              "void DestroyStack(Stack* pStack)",
-              "{",
-              "    if (pStack != NULL) {",
-              "        if (pStack->stack != NULL)",
-              "            free(pStack->stack);",
-              "        free(pStack);",
-              "    }",
-              "}",
-              "",
-              "int CountStackItem(Stack* pStack)",
-              "{",
-              "    return pStack->top + 1;",
-              "}",
-              "",
-              "void ClearStack(Stack* pStack)",
-              "{",
-              "    pStack->top = -1;",
+              "    if(pStack->stack != NULL)",
+              "        free(pStack->stack);",
+              "    free(pStack);",
               "}"
             ].join("\n")
           },
@@ -747,97 +760,45 @@
               "",
               "typedef struct tStackNode {",
               "    Element data;",
-              "    struct tStackNode* next;",
+              "    struct tStackNode *next;",
               "} StackNode;",
               "",
               "typedef struct {",
               "    int count;",
-              "    StackNode* top;",
+              "    StackNode *top;",
               "} Stack;",
               "",
               "Stack* CreateStack(int size)",
               "{",
-              "    Stack* pStack = (Stack*)malloc(sizeof(Stack));",
-              "    if (pStack == NULL)",
+              "    Stack *pStack = (Stack *)malloc(sizeof(Stack));",
+              "    if(pStack == NULL)",
               "        return NULL;",
-              "",
               "    pStack->count = 0;",
               "    pStack->top = NULL;",
               "    return pStack;",
               "}",
               "",
-              "Boolean IsFullStack(Stack* pStack)",
+              "void Push(Stack *pStack, Element item)",
               "{",
-              "    return 0;",
-              "}",
-              "",
-              "Boolean IsEmptyStack(Stack* pStack)",
-              "{",
-              "    if (pStack->count <= 0 || pStack->top == NULL)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "void Push(Stack* pStack, Element item)",
-              "{",
-              "    if (IsFullStack(pStack))",
+              "    StackNode *pNewNode = (StackNode *)malloc(sizeof(StackNode));",
+              "    if(pNewNode == NULL)",
               "        return;",
-              "",
-              "    StackNode* pNewNode = (StackNode*)malloc(sizeof(StackNode));",
-              "    if (pNewNode == NULL)",
-              "        return;",
-              "",
               "    pNewNode->data = item;",
               "    pNewNode->next = pStack->top;",
               "    pStack->top = pNewNode;",
               "    pStack->count++;",
               "}",
               "",
-              "Element Pop(Stack* pStack)",
+              "Element Pop(Stack *pStack)",
               "{",
-              "    if (IsEmptyStack(pStack))",
+              "    if(pStack->top == NULL)",
               "        return 0;",
-              "",
-              "    StackNode* dltPtr = pStack->top;",
+              "    StackNode *dltPtr = pStack->top;",
               "    Element item = dltPtr->data;",
-              "",
               "    pStack->top = dltPtr->next;",
               "    free(dltPtr);",
               "    pStack->count--;",
               "    return item;",
-              "}",
-              "",
-              "Element Top(Stack* pStack)",
-              "{",
-              "    if (IsEmptyStack(pStack))",
-              "        return 0;",
-              "",
-              "    return pStack->top->data;",
-              "}",
-              "",
-              "void DestroyStack(Stack* pStack)",
-              "{",
-              "    if (pStack != NULL) {",
-              "        StackNode* temp;",
-              "        while (pStack->top != NULL) {",
-              "            temp = pStack->top;",
-              "            pStack->top = pStack->top->next;",
-              "            free(temp);",
-              "        }",
-              "        free(pStack);",
-              "    }",
-              "}",
-              "",
-              "int CountStackItem(Stack* pStack)",
-              "{",
-              "    return pStack->count;",
-              "}",
-              "",
-              "void ClearStack(Stack* pStack)",
-              "{",
-              "    while (!IsEmptyStack(pStack)) {",
-              "        Pop(pStack);",
-              "    }",
               "}"
             ].join("\n")
           },
@@ -852,93 +813,40 @@
               "typedef int Boolean;",
               "",
               "typedef struct {",
-              "    Element* queue;",
+              "    Element *queue;",
               "    int size;",
               "    int front, rear;",
               "} Queue;",
               "",
               "Queue* CreateQueue(int size)",
               "{",
-              "    Queue* pQueue = (Queue*)malloc(sizeof(Queue));",
-              "    if (pQueue == NULL)",
+              "    Queue *pQueue = (Queue *)malloc(sizeof(Queue));",
+              "    if(pQueue == NULL)",
               "        return NULL;",
-              "",
-              "    pQueue->queue = (Element*)malloc(size * sizeof(Element));",
-              "    if (pQueue->queue == NULL) {",
+              "    pQueue->queue = (Element *)malloc(size * sizeof(Element));",
+              "    if(pQueue->queue == NULL){",
               "        free(pQueue);",
               "        return NULL;",
               "    }",
-              "",
               "    pQueue->size = size;",
               "    pQueue->front = pQueue->rear = 0;",
               "    return pQueue;",
               "}",
               "",
-              "Boolean IsFullQueue(Queue* pQueue)",
+              "void Enqueue(Queue *q, Element item)",
               "{",
-              "    if ((pQueue->rear + 1) % pQueue->size == pQueue->front)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "Boolean IsEmptyQueue(Queue* pQueue)",
-              "{",
-              "    if (pQueue->front == pQueue->rear)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "void Enqueue(Queue* pQueue, Element item)",
-              "{",
-              "    if (IsFullQueue(pQueue))",
+              "    if((q->rear + 1) % q->size == q->front)",
               "        return;",
-              "",
-              "    pQueue->rear = (pQueue->rear + 1) % pQueue->size;",
-              "    pQueue->queue[pQueue->rear] = item;",
+              "    q->rear = (q->rear + 1) % q->size;",
+              "    q->queue[q->rear] = item;",
               "}",
               "",
-              "Element Dequeue(Queue* pQueue)",
+              "Element Dequeue(Queue *q)",
               "{",
-              "    if (IsEmptyQueue(pQueue))",
+              "    if(q->front == q->rear)",
               "        return 0;",
-              "",
-              "    pQueue->front = (pQueue->front + 1) % pQueue->size;",
-              "    return pQueue->queue[pQueue->front];",
-              "}",
-              "",
-              "Element QueueFront(Queue* pQueue)",
-              "{",
-              "    if (IsEmptyQueue(pQueue))",
-              "        return 0;",
-              "",
-              "    return pQueue->queue[(pQueue->front + 1) % pQueue->size];",
-              "}",
-              "",
-              "Element QueueRear(Queue* pQueue)",
-              "{",
-              "    if (IsEmptyQueue(pQueue))",
-              "        return 0;",
-              "",
-              "    return pQueue->queue[pQueue->rear];",
-              "}",
-              "",
-              "void DestroyQueue(Queue* pQueue)",
-              "{",
-              "    if (pQueue != NULL) {",
-              "        if (pQueue->queue != NULL)",
-              "            free(pQueue->queue);",
-              "        free(pQueue);",
-              "    }",
-              "}",
-              "",
-              "int CountQueueItem(Queue* pQueue)",
-              "{",
-              "    return (pQueue->rear - pQueue->front + pQueue->size) % pQueue->size;",
-              "}",
-              "",
-              "void ClearQueue(Queue* pQueue)",
-              "{",
-              "    pQueue->front = pQueue->rear = 0;",
+              "    q->front = (q->front + 1) % q->size;",
+              "    return q->queue[q->front];",
               "}"
             ].join("\n")
           },
@@ -946,6 +854,7 @@
             title: "연결 리스트 큐",
             tag: "Queue_Link.h",
             code: [
+              "#pragma once",
               "#include <stdio.h>",
               "#include <stdlib.h>",
               "",
@@ -954,120 +863,105 @@
               "",
               "typedef struct tQueueNode {",
               "    Element data;",
-              "    struct tQueueNode* next;",
+              "    struct tQueueNode *next;",
               "} QueueNode;",
               "",
               "typedef struct {",
               "    int count;",
-              "    QueueNode* front, * rear;",
+              "    QueueNode *front, *rear;",
               "} Queue;",
               "",
-              "Queue* CreateQueue(int size)",
+              "Queue *CreateQueue(int size)",
               "{",
-              "    Queue* pQueue = (Queue*)malloc(sizeof(Queue));",
-              "    if (pQueue == NULL)",
+              "    Queue *pNewQueue = (Queue*)malloc(sizeof(Queue));",
+              "    if(pNewQueue == NULL)",
               "        return NULL;",
               "",
-              "    pQueue->count = 0;",
-              "    pQueue->front = pQueue->rear = NULL;",
-              "    return pQueue;",
+              "    pNewQueue->count = 0;",
+              "    pNewQueue->front = pNewQueue->rear = NULL;",
+              "    return pNewQueue;",
               "}",
               "",
-              "Boolean IsFullQueue(Queue* pQueue)",
+              "void Enqueue(Queue *pQueue, Element item)",
               "{",
-              "    return 0;",
-              "}",
-              "",
-              "Boolean IsEmptyQueue(Queue* pQueue)",
-              "{",
-              "    if (pQueue->count <= 0 || pQueue->front == NULL)",
-              "        return 1;",
-              "    return 0;",
-              "}",
-              "",
-              "void Enqueue(Queue* pQueue, Element item)",
-              "{",
-              "    if (IsFullQueue(pQueue))",
-              "        return;",
-              "",
-              "    QueueNode* pNewNode = (QueueNode*)malloc(sizeof(QueueNode));",
-              "    if (pNewNode == NULL)",
+              "    QueueNode *pNewNode = (QueueNode*)malloc(sizeof(QueueNode));",
+              "    if(pNewNode == NULL)",
               "        return;",
               "",
               "    pNewNode->data = item;",
               "    pNewNode->next = NULL;",
               "",
-              "    if (IsEmptyQueue(pQueue)) {",
+              "    if(pQueue->count <= 0){",
               "        pQueue->front = pQueue->rear = pNewNode;",
-              "    }",
-              "    else {",
+              "    } else {",
               "        pQueue->rear->next = pNewNode;",
               "        pQueue->rear = pNewNode;",
               "    }",
               "    pQueue->count++;",
               "}",
               "",
-              "Element Dequeue(Queue* pQueue)",
+              "Element Dequeue(Queue *pQueue)",
               "{",
-              "    if (IsEmptyQueue(pQueue))",
+              "    QueueNode *pFront = NULL;",
+              "    Element item = 0;",
+              "",
+              "    if(pQueue->count <= 0)",
               "        return 0;",
               "",
-              "    QueueNode* dltPtr = pQueue->front;",
-              "    Element item = dltPtr->data;",
+              "    pFront = pQueue->front;",
+              "    item = pFront->data;",
               "",
-              "    if (pQueue->count == 1) {",
+              "    if(pQueue->count == 1){",
               "        pQueue->front = pQueue->rear = NULL;",
-              "    }",
-              "    else {",
-              "        pQueue->front = dltPtr->next;",
+              "    } else {",
+              "        pQueue->front = pFront->next;",
               "    }",
               "",
-              "    free(dltPtr);",
+              "    free(pFront);",
               "    pQueue->count--;",
               "    return item;",
               "}",
               "",
-              "Element QueueFront(Queue* pQueue)",
+              "Element QueueFront(Queue *pQueue)",
               "{",
-              "    if (IsEmptyQueue(pQueue))",
+              "    if(pQueue->front == NULL)",
               "        return 0;",
               "",
               "    return pQueue->front->data;",
               "}",
               "",
-              "Element QueueRear(Queue* pQueue)",
+              "Element QueueRear(Queue *pQueue)",
               "{",
-              "    if (IsEmptyQueue(pQueue))",
+              "    if(pQueue->rear == NULL)",
               "        return 0;",
               "",
               "    return pQueue->rear->data;",
               "}",
               "",
-              "void DestroyQueue(Queue* pQueue)",
+              "Boolean IsEmptyQueue(Queue *pQueue)",
               "{",
-              "    if (pQueue != NULL) {",
-              "        QueueNode* temp;",
-              "        while (pQueue->front != NULL) {",
-              "            temp = pQueue->front;",
-              "            pQueue->front = pQueue->front->next;",
-              "            free(temp);",
-              "        }",
-              "        pQueue->count = 0;",
-              "        pQueue->front = pQueue->rear = NULL;",
-              "        free(pQueue);",
-              "    }",
+              "    if(pQueue->count <= 0)",
+              "        return 1;",
+              "    return 0;",
               "}",
               "",
-              "int CountQueueItem(Queue* pQueue)",
+              "Boolean IsFullQueue(Queue *pQueue)",
               "{",
-              "    return pQueue->count;",
+              "    return 0;",
               "}",
               "",
-              "void ClearQueue(Queue* pQueue)",
+              "void DestroyQueue(Queue *pQueue)",
               "{",
-              "    while (!IsEmptyQueue(pQueue)) {",
-              "        Dequeue(pQueue);",
+              "    QueueNode *pCur = NULL, *pNext = NULL;",
+              "",
+              "    for(pCur = pQueue->front; pCur != NULL; pCur = pNext){",
+              "        pNext = pCur->next;",
+              "        free(pCur);",
               "    }",
+              "",
+              "    pQueue->count = 0;",
+              "    pQueue->front = pQueue->rear = NULL;",
+              "    free(pQueue);",
               "}"
             ].join("\n")
           },
@@ -1186,6 +1080,10 @@
       const el = {
         overlay: document.getElementById("overlay"),
         rawCode: document.getElementById("rawCode"),
+        snippetSelect: document.getElementById("snippetSelect"),
+        modalSnippetSelect: document.getElementById("modalSnippetSelect"),
+        snippetTitle: document.getElementById("snippetTitle"),
+        snippetWarn: document.getElementById("snippetWarn"),
         board: document.getElementById("board"),
         finish: document.getElementById("finish"),
         hintBtn: document.getElementById("hintBtn"),
@@ -1201,23 +1099,24 @@
         statErr: document.getElementById("statErr"),
         finWpm: document.getElementById("finWpm"),
         finAcc: document.getElementById("finAcc"),
-        finErr: document.getElementById("finErr"),
-        finSkip: document.getElementById("finSkip")
+        finErr: document.getElementById("finErr")
       };
 
       const state = {
         lang: "c",
         mode: 1,
-        difficulty: 0.3, // 기본 보통 (30%)
+        difficulty: 0.3,
         sound: true,
-        raw: PRESETS.c[0].code,
+        raw: PRESETS.c[3].code,
+        snippets: [],
+        snippetId: "",
+        creatingSnippet: false,
         source: "",
         lines: [],
         startedAt: null,
         finished: false,
         keyCorrect: 0,
         keyWrong: 0,
-        skipCount: 0,
         tabHeld: false,
         tabComboUsed: false,
         showHint: false,
@@ -1277,7 +1176,8 @@
             mode: state.mode,
             difficulty: state.difficulty,
             sound: state.sound,
-            raw: state.raw
+            raw: state.raw,
+            snippetId: state.snippetId
           }));
         } catch (e) {}
       }
@@ -1292,7 +1192,188 @@
           if (typeof parsed.difficulty === "number") state.difficulty = parsed.difficulty;
           if (typeof parsed.sound === "boolean") state.sound = parsed.sound;
           if (typeof parsed.raw === "string" && parsed.raw.trim()) state.raw = parsed.raw;
+          if (typeof parsed.snippetId === "string") state.snippetId = parsed.snippetId;
         } catch (e) {}
+      }
+
+      function defaultSnippets() {
+        const seed = [];
+        const picks = [
+          PRESETS.c && PRESETS.c[0],
+          PRESETS.c && PRESETS.c[1],
+          PRESETS.c && PRESETS.c[3]
+        ];
+        const now = Date.now();
+        picks.forEach(function (item, i) {
+          if (!item) return;
+          seed.push({
+            id: "snippet_" + (now + i),
+            title: item.title,
+            code: item.code,
+            updatedAt: new Date().toISOString()
+          });
+        });
+        return seed;
+      }
+
+      function persistSnippets() {
+        try {
+          localStorage.setItem(SNIPPETS_KEY, JSON.stringify(state.snippets));
+        } catch (e) {}
+      }
+
+      function loadSnippets() {
+        try {
+          const saved = localStorage.getItem(SNIPPETS_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length) {
+              state.snippets = parsed.filter(function (item) {
+                return item && typeof item.id === "string" && typeof item.code === "string";
+              });
+              if (state.snippets.length) return;
+            }
+          }
+        } catch (e) {}
+        state.snippets = defaultSnippets();
+        persistSnippets();
+      }
+
+      function findSnippet(id) {
+        for (let i = 0; i < state.snippets.length; i += 1) {
+          if (state.snippets[i].id === id) return state.snippets[i];
+        }
+        return null;
+      }
+
+      function hideSnippetWarn() {
+        el.snippetWarn.classList.remove("show");
+      }
+
+      function showSnippetWarn(msg) {
+        el.snippetWarn.textContent = msg || "코드가 비어 있습니다. 본문을 입력한 뒤 저장하세요.";
+        el.snippetWarn.classList.add("show");
+      }
+
+      function renderSnippetSelects() {
+        const selects = [el.snippetSelect, el.modalSnippetSelect];
+        selects.forEach(function (sel) {
+          if (!sel) return;
+          const current = sel === el.modalSnippetSelect && state.creatingSnippet ? "" : state.snippetId;
+          sel.innerHTML = "";
+          if (!state.snippets.length) {
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "저장된 코드 없음";
+            sel.appendChild(empty);
+            return;
+          }
+          if (!state.snippetId || state.creatingSnippet) {
+            const ph = document.createElement("option");
+            ph.value = "";
+            ph.textContent = state.creatingSnippet ? "새 코드 작성 중" : "현재 코드 (미저장)";
+            sel.appendChild(ph);
+          }
+          state.snippets.forEach(function (item) {
+            const opt = document.createElement("option");
+            opt.value = item.id;
+            opt.textContent = item.title || "(제목 없음)";
+            sel.appendChild(opt);
+          });
+          sel.value = current || "";
+        });
+      }
+
+      function fillModalFromSnippet(snippet) {
+        hideSnippetWarn();
+        if (snippet) {
+          el.snippetTitle.value = snippet.title || "";
+          el.rawCode.value = snippet.code || "";
+        } else {
+          el.snippetTitle.value = "";
+          el.rawCode.value = "";
+        }
+      }
+
+      function applySnippet(id, fromModal) {
+        const snippet = findSnippet(id);
+        if (!snippet) return;
+        state.creatingSnippet = false;
+        state.snippetId = snippet.id;
+        state.raw = snippet.code;
+        hideSnippetWarn();
+        renderSnippetSelects();
+        if (fromModal) {
+          fillModalFromSnippet(snippet);
+          renderPresetButtons(el.modalLangSelect.value || state.lang);
+          return;
+        }
+        resetPractice(false);
+      }
+
+      function beginNewSnippet() {
+        state.creatingSnippet = true;
+        hideSnippetWarn();
+        fillModalFromSnippet(null);
+        renderSnippetSelects();
+        el.snippetTitle.focus();
+      }
+
+      function saveCurrentSnippet() {
+        const title = (el.snippetTitle.value || "").trim();
+        const code = el.rawCode.value;
+        if (!String(code).trim()) {
+          showSnippetWarn();
+          window.alert("코드가 비어 있거나 공백만 있습니다. 저장할 수 없습니다.");
+          el.rawCode.focus();
+          return;
+        }
+        hideSnippetWarn();
+        const resolvedTitle = title || "제목 없음";
+        if (!state.creatingSnippet && state.snippetId && findSnippet(state.snippetId)) {
+          const cur = findSnippet(state.snippetId);
+          cur.title = resolvedTitle;
+          cur.code = code;
+          cur.updatedAt = new Date().toISOString();
+        } else {
+          const snippet = {
+            id: "snippet_" + Date.now(),
+            title: resolvedTitle,
+            code: code,
+            updatedAt: new Date().toISOString()
+          };
+          state.snippets.push(snippet);
+          state.snippetId = snippet.id;
+        }
+        state.creatingSnippet = false;
+        state.raw = code;
+        persistSnippets();
+        renderSnippetSelects();
+        closeModal();
+        resetPractice(false);
+      }
+
+      function deleteCurrentSnippet() {
+        if (!state.snippetId || !findSnippet(state.snippetId)) {
+          window.alert("삭제할 저장된 코드가 없습니다.");
+          return;
+        }
+        const cur = findSnippet(state.snippetId);
+        const ok = window.confirm("\"" + (cur.title || "제목 없음") + "\" 코드를 삭제할까요?");
+        if (!ok) return;
+        state.snippets = state.snippets.filter(function (item) {
+          return item.id !== state.snippetId;
+        });
+        persistSnippets();
+        const next = state.snippets[0] || null;
+        state.snippetId = next ? next.id : "";
+        if (next) state.raw = next.code;
+        state.creatingSnippet = false;
+        renderSnippetSelects();
+        if (el.overlay.classList.contains("show")) {
+          fillModalFromSnippet(next);
+        }
+        resetPractice(false);
       }
 
       function esc(s) {
@@ -1522,7 +1603,6 @@
           btn.classList.toggle("active", Number(btn.getAttribute("data-mode")) === state.mode);
         });
 
-        // 빈칸 관련 모드(2, 3)일 때만 난이도 선택 버튼 노출
         const showDiff = (state.mode === 2 || state.mode === 3);
         el.diffGroup.style.display = showDiff ? "flex" : "none";
         document.querySelectorAll("#diffGroup button").forEach(function (btn) {
@@ -1562,7 +1642,6 @@
         state.finished = false;
         state.keyCorrect = 0;
         state.keyWrong = 0;
-        state.skipCount = 0;
         state.showHint = false;
         state.index = 0;
         state.flags = new Array(state.source.length).fill(0);
@@ -1577,7 +1656,6 @@
         el.hintBtn.classList.toggle("active-toggle", false);
         el.hintBtn.textContent = "힌트 보기";
 
-        // 항상 새로운 빈칸이 뚫리도록 keepBlanks를 무시하고 새로 계산
         state.tokens = tokenize(state.source);
         state.blankSet = pickBlanks(state.tokens, state.difficulty);
 
@@ -1649,7 +1727,6 @@
         el.finWpm.textContent = String(wpmValue());
         el.finAcc.textContent = accuracyValue() + "%";
         el.finErr.textContent = String(state.keyWrong);
-        el.finSkip.textContent = String(state.skipCount);
         el.finish.classList.add("show");
       }
 
@@ -1826,7 +1903,6 @@
 
         if (state.mode === 1 || state.mode === 2) {
           if (state.index >= state.source.length) return;
-          state.skipCount += 1;
           if (state.mode === 2 && state.charMask[state.index]) {
             while (state.index < state.source.length && state.charMask[state.index]) {
               state.flags[state.index] = 1;
@@ -1855,7 +1931,6 @@
 
         if (state.mode === 3) {
           if (!state.blankOrder.length) return;
-          state.skipCount += 1;
           state.blankPos += 1;
           state.blankTyped = "";
           if (state.blankPos >= state.blankOrder.length) {
@@ -1870,8 +1945,6 @@
         }
 
         if (state.mode === 4) {
-          if (state.lineIndex >= state.lines.length) return;
-          state.skipCount += 1;
           state.lineError = false;
           state.lineDiff = null;
           state.lineText = "";
@@ -2077,12 +2150,24 @@
         }
       }
 
-      function openModal() {
+      function openModal(createNew) {
         el.modalLangSelect.value = state.lang;
-        el.rawCode.value = state.raw;
+        state.creatingSnippet = !!createNew;
+        hideSnippetWarn();
+        if (createNew) {
+          fillModalFromSnippet(null);
+        } else {
+          const cur = findSnippet(state.snippetId);
+          el.snippetTitle.value = cur ? cur.title : "";
+          el.rawCode.value = state.raw;
+        }
+        renderSnippetSelects();
         renderPresetButtons(state.lang);
         el.overlay.classList.add("show");
-        setTimeout(function () { el.rawCode.focus(); }, 30);
+        setTimeout(function () {
+          if (createNew) el.snippetTitle.focus();
+          else el.rawCode.focus();
+        }, 30);
       }
 
       function closeModal() {
@@ -2100,6 +2185,13 @@
         }
         state.lang = lang;
         state.raw = raw;
+        const match = state.snippets.find(function (item) {
+          return item.code === raw;
+        });
+        if (match) state.snippetId = match.id;
+        else state.snippetId = "";
+        state.creatingSnippet = false;
+        renderSnippetSelects();
         closeModal();
         resetPractice(false);
       }
@@ -2148,12 +2240,34 @@
         el.board.focus();
       });
 
-      document.getElementById("openModalBtn").addEventListener("click", openModal);
-      document.getElementById("closeModalBtn").addEventListener("click", closeModal);
+      document.getElementById("openModalBtn").addEventListener("click", function () {
+        openModal(false);
+      });
+      document.getElementById("cancelSnippetBtn").addEventListener("click", closeModal);
+      document.getElementById("saveSnippetBtn").addEventListener("click", saveCurrentSnippet);
+      document.getElementById("newSnippetBtn").addEventListener("click", function () {
+        openModal(true);
+      });
+      document.getElementById("modalNewBtn").addEventListener("click", beginNewSnippet);
+      document.getElementById("deleteSnippetBtn").addEventListener("click", deleteCurrentSnippet);
+      document.getElementById("modalDeleteBtn").addEventListener("click", deleteCurrentSnippet);
       document.getElementById("startBtn").addEventListener("click", startFromModal);
       document.getElementById("restartBtn").addEventListener("click", restart);
       document.getElementById("againBtn").addEventListener("click", restart);
-      document.getElementById("finishEditBtn").addEventListener("click", openModal);
+      document.getElementById("finishEditBtn").addEventListener("click", function () {
+        openModal(false);
+      });
+
+      el.snippetSelect.addEventListener("change", function () {
+        if (!el.snippetSelect.value) return;
+        applySnippet(el.snippetSelect.value, false);
+      });
+      el.modalSnippetSelect.addEventListener("change", function () {
+        if (!el.modalSnippetSelect.value) return;
+        applySnippet(el.modalSnippetSelect.value, true);
+      });
+      el.rawCode.addEventListener("input", hideSnippetWarn);
+      el.snippetTitle.addEventListener("input", hideSnippetWarn);
 
       el.hintBtn.addEventListener("click", function () {
         state.showHint = !state.showHint;
@@ -2181,9 +2295,26 @@
         if (state.startedAt && !state.finished) updateStats();
       }, 250);
 
+      loadSnippets();
       loadSettings();
+      if (state.snippetId && findSnippet(state.snippetId)) {
+        state.raw = findSnippet(state.snippetId).code;
+      } else {
+        const matched = state.snippets.find(function (item) {
+          return item.code === state.raw;
+        });
+        if (matched) {
+          state.snippetId = matched.id;
+        } else if (!state.raw.trim() && state.snippets[0]) {
+          state.snippetId = state.snippets[0].id;
+          state.raw = state.snippets[0].code;
+        } else if (!state.snippetId && state.snippets[0] && state.raw === PRESETS.c[3].code) {
+          state.snippetId = state.snippets[0].id;
+          state.raw = state.snippets[0].code;
+        }
+      }
+      renderSnippetSelects();
       resetPractice(false);
     })();
   </script>
 </body>
-</html>
