@@ -52,10 +52,9 @@
 
     header {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px 16px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
       margin-bottom: 12px;
     }
 
@@ -63,6 +62,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      align-self: flex-start;
     }
 
     .logo-mark {
@@ -93,9 +93,12 @@
 
     .top-controls {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
-      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      width: 100%;
+      overflow-x: auto;
     }
 
     .lang-select, .snippet-select {
@@ -119,13 +122,23 @@
       text-overflow: ellipsis;
     }
 
-    .modes, .diff-group {
+    .mode-slot {
       display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-width: 172px;
+      min-height: 38px;
+      flex-shrink: 0;
+    }
+
+    .modes, .diff-group {
       background: var(--bg-elev);
       border-radius: 10px;
       padding: 4px;
       gap: 2px;
     }
+    .modes { display: flex; }
+    .diff-group { display: none; }
 
     .modes button, .diff-group button {
       border: 0;
@@ -154,8 +167,7 @@
       color: var(--sub);
       width: 100%;
       justify-content: center;
-      order: 5;
-      margin: 2px 0 6px;
+      margin: 0;
     }
 
     .stats b {
@@ -409,10 +421,19 @@
     .overlay.show { display: grid; }
     .modal {
       width: min(940px, 100%);
+      max-height: min(92vh, 820px);
       background: #2b2d30;
       border-radius: 14px;
-      padding: 24px;
+      padding: 20px 24px 16px;
       box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
     }
     .modal-header {
       display: flex;
@@ -429,9 +450,9 @@
 
     .preset-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
     .preset-card {
       background: #232528;
@@ -507,7 +528,8 @@
 
     textarea#rawCode {
       width: 100%;
-      height: 310px;
+      height: 200px;
+      min-height: 140px;
       resize: vertical;
       background: #232528;
       color: var(--text);
@@ -525,8 +547,11 @@
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      margin-top: 14px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #3c3f43;
       flex-wrap: wrap;
+      flex-shrink: 0;
     }
     .btn.primary {
       background: var(--caret);
@@ -571,8 +596,8 @@
 
     @media (max-width: 860px) {
       .app { padding: 14px; }
-      .stats { width: 100%; justify-content: space-between; }
       .code { font-size: 14px; }
+      .preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -596,8 +621,6 @@
         </select>
 
         <select id="snippetSelect" class="snippet-select" title="저장된 코드"></select>
-        <button type="button" class="btn" id="newSnippetBtn">새 코드</button>
-        <button type="button" class="btn ghost" id="deleteSnippetBtn">삭제</button>
 
         <div class="modes" role="tablist">
           <button type="button" data-mode="1" class="active">따라치기</button>
@@ -606,10 +629,27 @@
           <button type="button" data-mode="4">백지 암기</button>
         </div>
 
-        <div class="diff-group" id="diffGroup" style="display: none;">
-          <button type="button" data-diff="0.2">쉬움</button>
-          <button type="button" data-diff="0.3" class="active">보통</button>
-          <button type="button" data-diff="0.5">어려움</button>
+        <div class="mode-slot" id="modeSlot">
+          <div class="diff-group" id="diffGroup">
+            <button type="button" data-diff="0.2">쉬움</button>
+            <button type="button" data-diff="0.3" class="active">보통</button>
+            <button type="button" data-diff="0.5">어려움</button>
+          </div>
+          <button type="button" class="btn ghost" id="hintBtn" hidden>힌트 보기</button>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn active-toggle" id="soundBtn">타건음 ON</button>
+          <button type="button" class="btn" id="restartBtn">재시작</button>
+          <button type="button" class="btn primary" id="openModalBtn">코드 입력 / 목록</button>
+          <div class="auth-box">
+            <button type="button" class="btn" id="googleLoginBtn">Google 로그인</button>
+            <div class="user-chip" id="userChip">
+              <img id="userAvatar" alt="" />
+              <span id="userName"></span>
+              <button type="button" class="btn ghost" id="logoutBtn">로그아웃</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -619,21 +659,6 @@
         <span>정확도<b id="statAcc">100%</b></span>
         <span>진행도<b id="statProg">0%</b></span>
         <span>오타<b id="statErr">0</b></span>
-      </div>
-
-      <div class="actions">
-        <button type="button" class="btn ghost" id="hintBtn" hidden>힌트 보기</button>
-        <button type="button" class="btn active-toggle" id="soundBtn">타건음 ON</button>
-        <button type="button" class="btn" id="restartBtn">재시작</button>
-        <button type="button" class="btn primary" id="openModalBtn">코드 입력 / 목록</button>
-        <div class="auth-box">
-          <button type="button" class="btn" id="googleLoginBtn">Google 로그인</button>
-          <div class="user-chip" id="userChip">
-            <img id="userAvatar" alt="" />
-            <span id="userName"></span>
-            <button type="button" class="btn ghost" id="logoutBtn">로그아웃</button>
-          </div>
-        </div>
       </div>
     </header>
 
@@ -661,6 +686,8 @@
         <kbd>Tab</kbd> + <kbd>Enter</kbd> 재시작
         &nbsp;·&nbsp;
         <kbd>Esc</kbd> 코드 입력 / 목록
+        &nbsp;·&nbsp;
+        <kbd>F2</kbd> 현재 줄 힌트
       </div>
       <div>유연한 띄어쓰기 판정 · 주석 자동 제거 · 브라우저 자동 저장</div>
     </footer>
@@ -677,9 +704,10 @@
           <option value="python">Python</option>
         </select>
       </div>
-      <p class="note">언어를 바꾸면 해당 언어의 연습 코드가 목록에 표시됩니다. 새 코드를 추가할 때만 제목을 입력하세요. 주석은 연습 시작 시 자동으로 제거됩니다.</p>
+      <p class="note">드롭다운에는 이 언어의 기본 예시와 내가 저장한 코드가 함께 표시됩니다. 주석은 연습 시작 시 자동으로 제거됩니다.</p>
+      <div class="modal-body">
       <div class="modal-snippet-row">
-        <select id="modalSnippetSelect" class="snippet-select" title="저장된 코드 목록"></select>
+        <select id="modalSnippetSelect" class="snippet-select" title="저장한 코드 목록"></select>
         <button type="button" class="btn" id="modalNewBtn">새 코드 추가</button>
         <button type="button" class="btn ghost" id="modalDeleteBtn">삭제</button>
       </div>
@@ -687,6 +715,7 @@
       <input id="snippetTitle" class="title-input" type="text" maxlength="80" placeholder="코드 제목 (예: 연결 리스트 스택)" spellcheck="false" />
       <p class="snippet-warn" id="snippetWarn">코드가 비어 있습니다. 본문을 입력한 뒤 저장하세요.</p>
       <textarea id="rawCode" spellcheck="false" placeholder="연습할 코드 본문"></textarea>
+      </div>
       <div class="modal-actions">
         <span style="color: var(--sub); font-size: 12px; align-self: center;">* 목록은 typing_snippets 키로 이 브라우저에만 저장됩니다.</span>
         <div>
@@ -1279,6 +1308,12 @@
         } catch (e) {}
       }
 
+      const MAX_PRESETS = 4;
+
+      function presetList(lang) {
+        return (PRESETS[lang] || []).slice(0, MAX_PRESETS);
+      }
+
       function presetId(lang, index) {
         return "preset:" + lang + ":" + index;
       }
@@ -1288,7 +1323,7 @@
       }
 
       function presetSnippets(lang) {
-        const list = PRESETS[lang] || [];
+        const list = presetList(lang);
         return list.map(function (item, i) {
           return {
             id: presetId(lang, i),
@@ -1318,11 +1353,26 @@
         });
       }
 
+      function isBuiltInSnippet(item) {
+        if (!item) return true;
+        if (isBuiltInId(item.id)) return true;
+        if (isPresetCode(item.code)) return true;
+        const title = String(item.title || "").trim();
+        if (!title) return false;
+        return allPresetSnippets().some(function (preset) {
+          return preset.title === title;
+        });
+      }
+
+      function snippetLang(item) {
+        if (item && item.lang && KEYWORDS[item.lang]) return item.lang;
+        return "c";
+      }
+
       function userSnippetsForLang(lang) {
         return (state.snippets || []).filter(function (item) {
-          if (!item || isBuiltInId(item.id) || isPresetCode(item.code)) return false;
-          if (!item.lang) return true;
-          return item.lang === lang;
+          if (isBuiltInSnippet(item)) return false;
+          return snippetLang(item) === lang;
         });
       }
 
@@ -1354,7 +1404,7 @@
       function loadSnippets() {
         const parsed = readLocalSnippets();
         state.snippets = parsed.filter(function (item) {
-          return !isPresetCode(item.code);
+          return !isBuiltInSnippet(item);
         });
         if (parsed.length !== state.snippets.length) persistSnippets();
       }
@@ -1373,7 +1423,7 @@
 
       function hasCustomLocalSnippets(list) {
         return (list || []).some(function (item) {
-          return item && !isPresetCode(item.code);
+          return !isBuiltInSnippet(item);
         });
       }
 
@@ -1388,7 +1438,7 @@
         const prevId = state.snippetId;
         const modalOpen = el.overlay.classList.contains("show");
         state.snippets = (list || []).filter(function (item) {
-          return item && !isPresetCode(item.code);
+          return !isBuiltInSnippet(item);
         });
         renderSnippetSelects();
         const cur = findSnippet(prevId);
@@ -1413,11 +1463,12 @@
         try {
           const batch = writeBatch(firebaseDb);
           local.forEach(function (item) {
-            if (!item.id || !String(item.code || "").trim() || isPresetCode(item.code)) return;
+            if (!item.id || !String(item.code || "").trim() || isBuiltInSnippet(item)) return;
             batch.set(snippetDoc(uid, item.id), {
               id: item.id,
               title: item.title || "제목 없음",
               code: item.code,
+              lang: snippetLang(item),
               updatedAt: item.updatedAt || new Date().toISOString()
             }, { merge: true });
           });
@@ -1437,6 +1488,7 @@
               id: data.id || d.id,
               title: data.title || "",
               code: data.code || "",
+              lang: data.lang || "",
               updatedAt: data.updatedAt || ""
             });
           });
@@ -1567,6 +1619,23 @@
         if (!state.creatingSnippet) el.snippetTitle.value = "";
       }
 
+      function setHint(on) {
+        state.showHint = !!on;
+        el.hintBtn.classList.toggle("active-toggle", state.showHint);
+        el.hintBtn.textContent = state.showHint ? "힌트 숨기기" : "힌트 보기";
+      }
+
+      function toggleHint() {
+        if (state.mode !== 4 || state.finished) return;
+        setHint(!state.showHint);
+        render();
+      }
+
+      function clearLineHint() {
+        if (!state.showHint) return;
+        setHint(false);
+      }
+
       function hideSnippetWarn() {
         el.snippetWarn.classList.remove("show");
       }
@@ -1576,12 +1645,12 @@
         el.snippetWarn.classList.add("show");
       }
 
-      function addOptions(group, items) {
+      function appendSnippetOptions(parent, items) {
         items.forEach(function (item) {
           const opt = document.createElement("option");
           opt.value = item.id;
           opt.textContent = item.title || "(제목 없음)";
-          group.appendChild(opt);
+          parent.appendChild(opt);
         });
       }
 
@@ -1589,7 +1658,6 @@
         if (!sel) return;
         const presets = presetSnippets(lang);
         const mine = userSnippetsForLang(lang);
-        const current = creating ? "" : state.snippetId;
         sel.innerHTML = "";
         if (creating) {
           const ph = document.createElement("option");
@@ -1599,19 +1667,21 @@
         }
         const presetGroup = document.createElement("optgroup");
         presetGroup.label = "연습 코드";
-        addOptions(presetGroup, presets);
+        appendSnippetOptions(presetGroup, presets);
         sel.appendChild(presetGroup);
         if (mine.length) {
           const mineGroup = document.createElement("optgroup");
           mineGroup.label = "내 코드";
-          addOptions(mineGroup, mine);
+          appendSnippetOptions(mineGroup, mine);
           sel.appendChild(mineGroup);
         }
         if (creating) {
           sel.value = "";
-        } else if (current) {
-          sel.value = current;
-          if (sel.value !== current && presets[0]) sel.value = presets[0].id;
+          return;
+        }
+        const ids = presets.concat(mine).map(function (item) { return item.id; });
+        if (state.snippetId && ids.indexOf(state.snippetId) !== -1) {
+          sel.value = state.snippetId;
         } else if (presets[0]) {
           sel.value = presets[0].id;
         }
@@ -1976,6 +2046,7 @@
 
         const showDiff = (state.mode === 2 || state.mode === 3);
         el.diffGroup.style.display = showDiff ? "flex" : "none";
+        el.hintBtn.hidden = state.mode !== 4;
         document.querySelectorAll("#diffGroup button").forEach(function (btn) {
           const val = Number(btn.getAttribute("data-diff"));
           btn.classList.toggle("active", Math.abs(val - state.difficulty) < 0.01);
@@ -1983,7 +2054,7 @@
       }
 
       function renderPresetButtons(lang) {
-        const list = PRESETS[lang] || [];
+        const list = presetList(lang);
         el.presetBar.innerHTML = "";
         list.forEach(function (item, i) {
           const card = document.createElement("button");
@@ -2312,6 +2383,7 @@
         }
 
         if (state.mode === 4) {
+          clearLineHint();
           state.lineError = false;
           state.lineDiff = null;
           state.lineText = "";
@@ -2427,6 +2499,7 @@
         startClock();
 
         if (state.lineError) {
+          clearLineHint();
           state.lineError = false;
           state.lineDiff = null;
           state.lineText = "";
@@ -2449,6 +2522,7 @@
         if (normalizeCodeLine(assembled) === normalizeCodeLine(orig)) {
           const typedLen = state.lineText.length;
           state.keyCorrect += Math.max(1, typedLen);
+          clearLineHint();
           state.lineError = false;
           state.lineDiff = null;
           state.lineText = "";
@@ -2482,6 +2556,12 @@
         }
 
         if (el.overlay.classList.contains("show")) return;
+
+        if (e.key === "F2") {
+          e.preventDefault();
+          toggleHint();
+          return;
+        }
 
         if (e.key === "Tab") {
           e.preventDefault();
@@ -2625,11 +2705,7 @@
       });
       document.getElementById("cancelSnippetBtn").addEventListener("click", closeModal);
       document.getElementById("saveSnippetBtn").addEventListener("click", saveCurrentSnippet);
-      document.getElementById("newSnippetBtn").addEventListener("click", function () {
-        openModal(true);
-      });
       document.getElementById("modalNewBtn").addEventListener("click", beginNewSnippet);
-      document.getElementById("deleteSnippetBtn").addEventListener("click", deleteCurrentSnippet);
       document.getElementById("modalDeleteBtn").addEventListener("click", deleteCurrentSnippet);
       document.getElementById("startBtn").addEventListener("click", startFromModal);
       document.getElementById("restartBtn").addEventListener("click", restart);
@@ -2652,10 +2728,7 @@
       el.logoutBtn.addEventListener("click", handleLogout);
 
       el.hintBtn.addEventListener("click", function () {
-        state.showHint = !state.showHint;
-        el.hintBtn.classList.toggle("active-toggle", state.showHint);
-        el.hintBtn.textContent = state.showHint ? "힌트 숨기기" : "힌트 보기";
-        render();
+        toggleHint();
       });
 
       el.overlay.addEventListener("click", function (e) {
