@@ -479,6 +479,12 @@
       outline: none;
     }
     .title-input:focus { border-color: var(--caret); }
+    .title-input[hidden] { display: none !important; }
+    .snippet-select optgroup {
+      color: var(--sub);
+      font-style: normal;
+      font-weight: 600;
+    }
     .snippet-warn {
       display: none;
       color: var(--error);
@@ -671,7 +677,7 @@
           <option value="python">Python</option>
         </select>
       </div>
-      <p class="note">저장된 코드를 고르거나 제목과 본문을 입력해 이 브라우저(localStorage)에 보관하세요. 주석은 연습 시작 시 자동으로 제거됩니다.</p>
+      <p class="note">언어를 바꾸면 해당 언어의 연습 코드가 목록에 표시됩니다. 새 코드를 추가할 때만 제목을 입력하세요. 주석은 연습 시작 시 자동으로 제거됩니다.</p>
       <div class="modal-snippet-row">
         <select id="modalSnippetSelect" class="snippet-select" title="저장된 코드 목록"></select>
         <button type="button" class="btn" id="modalNewBtn">새 코드 추가</button>
@@ -1273,24 +1279,55 @@
         } catch (e) {}
       }
 
-      function defaultSnippets() {
-        const seed = [];
-        const picks = [
-          PRESETS.c && PRESETS.c[0],
-          PRESETS.c && PRESETS.c[1],
-          PRESETS.c && PRESETS.c[3]
-        ];
-        const now = Date.now();
-        picks.forEach(function (item, i) {
-          if (!item) return;
-          seed.push({
-            id: "snippet_" + (now + i),
+      function presetId(lang, index) {
+        return "preset:" + lang + ":" + index;
+      }
+
+      function isBuiltInId(id) {
+        return String(id || "").indexOf("preset:") === 0;
+      }
+
+      function presetSnippets(lang) {
+        const list = PRESETS[lang] || [];
+        return list.map(function (item, i) {
+          return {
+            id: presetId(lang, i),
             title: item.title,
             code: item.code,
-            updatedAt: new Date().toISOString()
+            lang: lang,
+            builtIn: true
+          };
+        });
+      }
+
+      function allPresetSnippets() {
+        const out = [];
+        Object.keys(PRESETS).forEach(function (lang) {
+          presetSnippets(lang).forEach(function (item) {
+            out.push(item);
           });
         });
-        return seed;
+        return out;
+      }
+
+      function isPresetCode(code) {
+        const trimmed = String(code || "").trim();
+        if (!trimmed) return false;
+        return allPresetSnippets().some(function (item) {
+          return String(item.code).trim() === trimmed;
+        });
+      }
+
+      function userSnippetsForLang(lang) {
+        return (state.snippets || []).filter(function (item) {
+          if (!item || isBuiltInId(item.id) || isPresetCode(item.code)) return false;
+          if (!item.lang) return true;
+          return item.lang === lang;
+        });
+      }
+
+      function visibleSnippets(lang) {
+        return presetSnippets(lang).concat(userSnippetsForLang(lang));
       }
 
       function persistSnippets() {
@@ -1316,12 +1353,10 @@
 
       function loadSnippets() {
         const parsed = readLocalSnippets();
-        if (parsed.length) {
-          state.snippets = parsed;
-          return;
-        }
-        state.snippets = defaultSnippets();
-        persistSnippets();
+        state.snippets = parsed.filter(function (item) {
+          return !isPresetCode(item.code);
+        });
+        if (parsed.length !== state.snippets.length) persistSnippets();
       }
 
       function isLoggedIn() {
@@ -1337,12 +1372,8 @@
       }
 
       function hasCustomLocalSnippets(list) {
-        const presetCodes = [];
-        [0, 1, 3].forEach(function (idx) {
-          if (PRESETS.c && PRESETS.c[idx]) presetCodes.push(String(PRESETS.c[idx].code).trim());
-        });
         return (list || []).some(function (item) {
-          return presetCodes.indexOf(String(item.code || "").trim()) === -1;
+          return item && !isPresetCode(item.code);
         });
       }
 
@@ -1356,15 +1387,18 @@
       function applyCloudList(list) {
         const prevId = state.snippetId;
         const modalOpen = el.overlay.classList.contains("show");
-        state.snippets = list.slice();
+        state.snippets = (list || []).filter(function (item) {
+          return item && !isPresetCode(item.code);
+        });
         renderSnippetSelects();
         const cur = findSnippet(prevId);
         if (cur) {
           if (modalOpen && !state.creatingSnippet) fillModalFromSnippet(cur);
           return;
         }
-        if (state.snippets[0]) {
-          applySnippet(state.snippets[0].id, modalOpen);
+        const first = visibleSnippets(state.lang)[0];
+        if (first) {
+          applySnippet(first.id, modalOpen);
           return;
         }
         state.snippetId = "";
@@ -1379,7 +1413,7 @@
         try {
           const batch = writeBatch(firebaseDb);
           local.forEach(function (item) {
-            if (!item.id || !String(item.code || "").trim()) return;
+            if (!item.id || !String(item.code || "").trim() || isPresetCode(item.code)) return;
             batch.set(snippetDoc(uid, item.id), {
               id: item.id,
               title: item.title || "제목 없음",
@@ -1418,17 +1452,32 @@
       function restoreLocalSnippets() {
         unsubscribeCloud();
         loadSnippets();
+        selectInitialSnippet();
+        state.creatingSnippet = false;
+        syncTitleField();
+        renderSnippetSelects();
+        resetPractice(false);
+      }
+
+      function selectInitialSnippet() {
         if (state.snippetId && findSnippet(state.snippetId)) {
           state.raw = findSnippet(state.snippetId).code;
-        } else if (state.snippets[0]) {
-          state.snippetId = state.snippets[0].id;
-          state.raw = state.snippets[0].code;
+          return;
+        }
+        const vis = visibleSnippets(state.lang);
+        const matched = vis.find(function (item) {
+          return item.code === state.raw;
+        });
+        if (matched) {
+          state.snippetId = matched.id;
+          return;
+        }
+        if (vis[0]) {
+          state.snippetId = vis[0].id;
+          state.raw = vis[0].code;
         } else {
           state.snippetId = "";
         }
-        state.creatingSnippet = false;
-        renderSnippetSelects();
-        resetPractice(false);
       }
 
       function renderAuthUI() {
@@ -1498,10 +1547,24 @@
       }
 
       function findSnippet(id) {
+        if (!id) return null;
+        const vis = visibleSnippets(state.lang);
+        for (let i = 0; i < vis.length; i += 1) {
+          if (vis[i].id === id) return vis[i];
+        }
+        const presets = allPresetSnippets();
+        for (let i = 0; i < presets.length; i += 1) {
+          if (presets[i].id === id) return presets[i];
+        }
         for (let i = 0; i < state.snippets.length; i += 1) {
           if (state.snippets[i].id === id) return state.snippets[i];
         }
         return null;
+      }
+
+      function syncTitleField() {
+        el.snippetTitle.hidden = !state.creatingSnippet;
+        if (!state.creatingSnippet) el.snippetTitle.value = "";
       }
 
       function hideSnippetWarn() {
@@ -1513,65 +1576,86 @@
         el.snippetWarn.classList.add("show");
       }
 
-      function renderSnippetSelects() {
-        const selects = [el.snippetSelect, el.modalSnippetSelect];
-        selects.forEach(function (sel) {
-          if (!sel) return;
-          const current = sel === el.modalSnippetSelect && state.creatingSnippet ? "" : state.snippetId;
-          sel.innerHTML = "";
-          if (!state.snippets.length) {
-            const empty = document.createElement("option");
-            empty.value = "";
-            empty.textContent = "저장된 코드 없음";
-            sel.appendChild(empty);
-            return;
-          }
-          if (!state.snippetId || state.creatingSnippet) {
-            const ph = document.createElement("option");
-            ph.value = "";
-            ph.textContent = state.creatingSnippet ? "새 코드 작성 중" : "현재 코드 (미저장)";
-            sel.appendChild(ph);
-          }
-          state.snippets.forEach(function (item) {
-            const opt = document.createElement("option");
-            opt.value = item.id;
-            opt.textContent = item.title || "(제목 없음)";
-            sel.appendChild(opt);
-          });
-          sel.value = current || "";
+      function addOptions(group, items) {
+        items.forEach(function (item) {
+          const opt = document.createElement("option");
+          opt.value = item.id;
+          opt.textContent = item.title || "(제목 없음)";
+          group.appendChild(opt);
         });
+      }
+
+      function renderOneSnippetSelect(sel, lang, creating) {
+        if (!sel) return;
+        const presets = presetSnippets(lang);
+        const mine = userSnippetsForLang(lang);
+        const current = creating ? "" : state.snippetId;
+        sel.innerHTML = "";
+        if (creating) {
+          const ph = document.createElement("option");
+          ph.value = "";
+          ph.textContent = "새 코드 작성 중";
+          sel.appendChild(ph);
+        }
+        const presetGroup = document.createElement("optgroup");
+        presetGroup.label = "연습 코드";
+        addOptions(presetGroup, presets);
+        sel.appendChild(presetGroup);
+        if (mine.length) {
+          const mineGroup = document.createElement("optgroup");
+          mineGroup.label = "내 코드";
+          addOptions(mineGroup, mine);
+          sel.appendChild(mineGroup);
+        }
+        if (creating) {
+          sel.value = "";
+        } else if (current) {
+          sel.value = current;
+          if (sel.value !== current && presets[0]) sel.value = presets[0].id;
+        } else if (presets[0]) {
+          sel.value = presets[0].id;
+        }
+      }
+
+      function renderSnippetSelects() {
+        const modalLang = (el.modalLangSelect && el.modalLangSelect.value) || state.lang;
+        renderOneSnippetSelect(el.snippetSelect, state.lang, false);
+        renderOneSnippetSelect(el.modalSnippetSelect, modalLang, state.creatingSnippet);
       }
 
       function fillModalFromSnippet(snippet) {
         hideSnippetWarn();
         if (snippet) {
-          el.snippetTitle.value = snippet.title || "";
           el.rawCode.value = snippet.code || "";
         } else {
-          el.snippetTitle.value = "";
           el.rawCode.value = "";
         }
+        syncTitleField();
       }
 
       function applySnippet(id, fromModal) {
         const snippet = findSnippet(id);
         if (!snippet) return;
         state.creatingSnippet = false;
-        state.snippetId = snippet.id;
-        state.raw = snippet.code;
         hideSnippetWarn();
-        renderSnippetSelects();
+        syncTitleField();
         if (fromModal) {
           fillModalFromSnippet(snippet);
+          renderSnippetSelects();
+          if (el.modalSnippetSelect) el.modalSnippetSelect.value = snippet.id;
           renderPresetButtons(el.modalLangSelect.value || state.lang);
           return;
         }
+        state.snippetId = snippet.id;
+        state.raw = snippet.code;
+        renderSnippetSelects();
         resetPractice(false);
       }
 
       function beginNewSnippet() {
         state.creatingSnippet = true;
         hideSnippetWarn();
+        el.snippetTitle.value = "";
         fillModalFromSnippet(null);
         renderSnippetSelects();
         el.snippetTitle.focus();
@@ -1582,6 +1666,7 @@
           id: snippet.id,
           title: snippet.title,
           code: snippet.code,
+          lang: snippet.lang || state.lang,
           updatedAt: snippet.updatedAt
         }, { merge: true });
       }
@@ -1596,18 +1681,22 @@
           return;
         }
         hideSnippetWarn();
-        const resolvedTitle = title || "제목 없음";
+        const lang = el.modalLangSelect.value || state.lang;
+        const resolvedTitle = title || (state.creatingSnippet ? "제목 없음" : ((findSnippet(state.snippetId) || {}).title || "제목 없음"));
         let snippet;
-        if (!state.creatingSnippet && state.snippetId && findSnippet(state.snippetId)) {
-          snippet = findSnippet(state.snippetId);
-          snippet.title = resolvedTitle;
+        const current = findSnippet(state.snippetId);
+        if (!state.creatingSnippet && current && !current.builtIn) {
+          snippet = current;
+          snippet.title = title ? resolvedTitle : snippet.title;
           snippet.code = code;
+          snippet.lang = lang;
           snippet.updatedAt = new Date().toISOString();
         } else {
           snippet = {
             id: "snippet_" + Date.now(),
             title: resolvedTitle,
             code: code,
+            lang: lang,
             updatedAt: new Date().toISOString()
           };
           state.snippets.push(snippet);
@@ -1628,11 +1717,11 @@
       }
 
       function deleteCurrentSnippet() {
-        if (!state.snippetId || !findSnippet(state.snippetId)) {
-          window.alert("삭제할 저장된 코드가 없습니다.");
+        const cur = findSnippet(state.snippetId);
+        if (!cur || cur.builtIn) {
+          window.alert("기본 연습 코드는 삭제할 수 없습니다. 내가 저장한 코드만 삭제됩니다.");
           return;
         }
-        const cur = findSnippet(state.snippetId);
         const ok = window.confirm("\"" + (cur.title || "제목 없음") + "\" 코드를 삭제할까요?");
         if (!ok) return;
         const removedId = state.snippetId;
@@ -1646,10 +1735,11 @@
         } else {
           persistSnippets();
         }
-        const next = state.snippets[0] || null;
+        const next = visibleSnippets(state.lang)[0] || null;
         state.snippetId = next ? next.id : "";
         if (next) state.raw = next.code;
         state.creatingSnippet = false;
+        syncTitleField();
         renderSnippetSelects();
         if (el.overlay.classList.contains("show")) {
           fillModalFromSnippet(next);
@@ -1895,7 +1985,7 @@
       function renderPresetButtons(lang) {
         const list = PRESETS[lang] || [];
         el.presetBar.innerHTML = "";
-        list.forEach(function (item) {
+        list.forEach(function (item, i) {
           const card = document.createElement("button");
           card.type = "button";
           card.className = "preset-card";
@@ -1904,11 +1994,7 @@
           }
           card.innerHTML = '<span>' + esc(item.title) + '</span><span class="sub-tag">' + esc(item.tag || "") + '</span>';
           card.addEventListener("click", function () {
-            el.rawCode.value = item.code;
-            el.presetBar.querySelectorAll(".preset-card").forEach(function (c) {
-              c.classList.remove("selected");
-            });
-            card.classList.add("selected");
+            applySnippet(presetId(lang, i), true);
             el.rawCode.focus();
           });
           el.presetBar.appendChild(card);
@@ -2436,11 +2522,12 @@
         state.creatingSnippet = !!createNew;
         hideSnippetWarn();
         if (createNew) {
+          el.snippetTitle.value = "";
           fillModalFromSnippet(null);
         } else {
           const cur = findSnippet(state.snippetId);
-          el.snippetTitle.value = cur ? cur.title : "";
-          el.rawCode.value = state.raw;
+          el.rawCode.value = cur ? cur.code : state.raw;
+          syncTitleField();
         }
         renderSnippetSelects();
         renderPresetButtons(state.lang);
@@ -2466,12 +2553,14 @@
         }
         state.lang = lang;
         state.raw = raw;
-        const match = state.snippets.find(function (item) {
+        const vis = visibleSnippets(lang);
+        const match = vis.find(function (item) {
           return item.code === raw;
         });
         if (match) state.snippetId = match.id;
-        else state.snippetId = "";
+        else if (state.creatingSnippet) state.snippetId = "";
         state.creatingSnippet = false;
+        syncTitleField();
         renderSnippetSelects();
         closeModal();
         resetPractice(false);
@@ -2501,17 +2590,27 @@
 
       el.langSelect.addEventListener("change", function () {
         state.lang = el.langSelect.value;
-        const defaultPreset = (PRESETS[state.lang] && PRESETS[state.lang][0]) ? PRESETS[state.lang][0].code : "";
-        if (defaultPreset) state.raw = defaultPreset;
+        state.creatingSnippet = false;
+        const first = presetSnippets(state.lang)[0];
+        if (first) {
+          state.snippetId = first.id;
+          state.raw = first.code;
+        }
+        renderSnippetSelects();
         resetPractice(false);
       });
 
       el.modalLangSelect.addEventListener("change", function () {
         const lang = el.modalLangSelect.value;
-        if (PRESETS[lang] && PRESETS[lang][0]) {
-          el.rawCode.value = PRESETS[lang][0].code;
+        state.creatingSnippet = false;
+        syncTitleField();
+        const first = presetSnippets(lang)[0];
+        if (first) {
+          el.rawCode.value = first.code;
         }
+        renderSnippetSelects();
         renderPresetButtons(lang);
+        if (first) el.modalSnippetSelect.value = first.id;
       });
 
       el.soundBtn.addEventListener("click", function () {
@@ -2585,22 +2684,8 @@
         if (user) onUserSignedIn(user);
         else onUserSignedOut();
       });
-      if (state.snippetId && findSnippet(state.snippetId)) {
-        state.raw = findSnippet(state.snippetId).code;
-      } else {
-        const matched = state.snippets.find(function (item) {
-          return item.code === state.raw;
-        });
-        if (matched) {
-          state.snippetId = matched.id;
-        } else if (!state.raw.trim() && state.snippets[0]) {
-          state.snippetId = state.snippets[0].id;
-          state.raw = state.snippets[0].code;
-        } else if (!state.snippetId && state.snippets[0] && state.raw === PRESETS.c[3].code) {
-          state.snippetId = state.snippets[0].id;
-          state.raw = state.snippets[0].code;
-        }
-      }
+      selectInitialSnippet();
+      syncTitleField();
       renderSnippetSelects();
       resetPractice(false);
     })();
