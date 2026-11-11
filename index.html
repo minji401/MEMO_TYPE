@@ -733,6 +733,8 @@
       getAuth,
       GoogleAuthProvider,
       signInWithPopup,
+      signInWithRedirect,
+      getRedirectResult,
       signOut,
       onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
@@ -759,6 +761,7 @@
     const firebaseAuth = getAuth(firebaseApp);
     const firebaseDb = getFirestore(firebaseApp);
     const googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: "select_account" });
 
     (function () {
       const STORAGE_KEY = "memotype_state_v5";
@@ -1553,6 +1556,38 @@
         }
       }
 
+      function loginErrorMessage(err) {
+        const code = err && err.code;
+        const host = location.hostname || "";
+        if (code === "auth/unauthorized-domain") {
+          return "이 사이트 도메인(" + host + ")이 Firebase에 허용되어 있지 않습니다.\n\nFirebase 콘솔 → Authentication → Settings → Authorized domains에\n" + host + "\n를 추가한 뒤 다시 로그인하세요.";
+        }
+        if (code === "auth/operation-not-allowed") {
+          return "Firebase 콘솔에서 Google 로그인 제공업체가 꺼져 있습니다.\nAuthentication → Sign-in method → Google을 사용 설정해 주세요.";
+        }
+        if (code === "auth/popup-blocked") {
+          return "브라우저가 로그인 팝업을 막았습니다. 팝업을 허용하거나, 리다이렉트 로그인을 시도합니다.";
+        }
+        if (code === "auth/network-request-failed") {
+          return "네트워크 연결을 확인한 뒤 다시 시도해 주세요.";
+        }
+        if (code === "auth/invalid-api-key") {
+          return "Firebase API 키가 올바르지 않습니다. 콘솔에서 웹 앱 설정을 확인해 주세요.";
+        }
+        if (code === "auth/internal-error") {
+          return "로그인 팝업이 차단되었거나 도메인이 허용되지 않았습니다.\nFirebase Authorized domains에 " + host + " 가 있는지 확인하세요.";
+        }
+        return "Google 로그인에 실패했습니다." + (code ? "\n(" + code + ")" : "");
+      }
+
+      async function loginWithRedirect() {
+        try {
+          await signInWithRedirect(firebaseAuth, googleProvider);
+        } catch (err) {
+          window.alert(loginErrorMessage(err));
+        }
+      }
+
       async function handleGoogleLogin() {
         el.googleLoginBtn.disabled = true;
         try {
@@ -1562,11 +1597,11 @@
           if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
             return;
           }
-          if (code === "auth/popup-blocked") {
-            window.alert("팝업이 차단되어 Google 로그인에 실패했습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해 주세요.");
+          if (code === "auth/popup-blocked" || code === "auth/internal-error") {
+            await loginWithRedirect();
             return;
           }
-          window.alert("Google 로그인에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.");
+          window.alert(loginErrorMessage(err));
         } finally {
           el.googleLoginBtn.disabled = false;
         }
@@ -2753,6 +2788,11 @@
       loadSnippets();
       loadSettings();
       renderAuthUI();
+      getRedirectResult(firebaseAuth).catch(function (err) {
+        const code = err && err.code;
+        if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
+        window.alert(loginErrorMessage(err));
+      });
       onAuthStateChanged(firebaseAuth, function (user) {
         if (user) onUserSignedIn(user);
         else onUserSignedOut();
