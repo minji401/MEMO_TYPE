@@ -254,7 +254,7 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
-      touch-action: manipulation;
+      touch-action: pan-x;
       -webkit-user-select: none;
       user-select: none;
     }
@@ -275,7 +275,7 @@
       justify-content: center;
       user-select: none;
       -webkit-user-select: none;
-      touch-action: manipulation;
+      touch-action: pan-x;
     }
 
     .mobile-restart { display: none; }
@@ -1369,40 +1369,39 @@
       };
 
       let audioCtx = null;
+      let charSpans = [];
       function playClick(isError) {
         if (!state.sound) return;
-        setTimeout(function () {
-          try {
-            if (!audioCtx) {
-              const AudioContext = window.AudioContext || window.webkitAudioContext;
-              audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === "suspended") audioCtx.resume();
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            if (isError) {
-              osc.type = "sawtooth";
-              osc.frequency.setValueAtTime(160, now);
-              gain.gain.setValueAtTime(0.08, now);
-              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-              osc.connect(gain);
-              gain.connect(audioCtx.destination);
-              osc.start(now);
-              osc.stop(now + 0.08);
-            } else {
-              osc.type = "triangle";
-              osc.frequency.setValueAtTime(620, now);
-              osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
-              gain.gain.setValueAtTime(0.12, now);
-              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-              osc.connect(gain);
-              gain.connect(audioCtx.destination);
-              osc.start(now);
-              osc.stop(now + 0.025);
-            }
-          } catch (err) {}
-        }, 0);
+        try {
+          if (!audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+          }
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          if (isError) {
+            osc.type = "sawtooth";
+            osc.frequency.setValueAtTime(160, now);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          } else {
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(620, now);
+            osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.025);
+          }
+        } catch (err) {}
       }
 
       function saveSettings() {
@@ -2359,23 +2358,24 @@
       }
 
       function patchTypingChars(fromPos, toPos) {
-        const spans = el.board.querySelectorAll(".code .ch");
-        if (!spans.length || spans.length !== state.source.length) {
+        if (!charSpans.length || charSpans.length !== state.source.length) {
           renderTypingMode(state.mode === 2);
           return;
         }
         const isMasked = state.mode === 2;
         const start = Math.max(0, Math.min(fromPos, toPos) - 1);
-        const end = Math.min(spans.length - 1, Math.max(fromPos, toPos) + 1);
+        const end = Math.min(charSpans.length - 1, Math.max(fromPos, toPos) + 1);
         for (let pos = start; pos <= end; pos += 1) {
           const info = typingClassAt(pos, isMasked);
-          spans[pos].className = info.cls;
+          charSpans[pos].className = info.cls;
           if (isMasked) {
             const raw = state.source[pos] === "\n" ? " " : state.source[pos];
-            spans[pos].textContent = info.isBlind ? "_" : raw;
+            charSpans[pos].textContent = info.isBlind ? "_" : raw;
           }
         }
-        scrollCaretIfNeeded();
+        if (state.source[fromPos] === "\n" || state.source[toPos] === "\n") {
+          scrollCaretIfNeeded();
+        }
       }
 
       function renderTypingMode(isMasked) {
@@ -2419,6 +2419,7 @@
         }
         html += "</div>";
         el.board.innerHTML = html;
+        charSpans = el.board.querySelectorAll(".code .ch");
       }
 
       function renderMode3() {
@@ -2878,8 +2879,14 @@
         if (state.finished) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-        if (catcherIsActive() && isTypingKey(e)) return;
         if (isImeKey(e)) return;
+        if (catcherIsActive() && isTypingKey(e)) {
+          if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
+          else if (state.mode === 3) handleBlankOnlyKey(e);
+          else handleBlindLineKey(e);
+          updateStats();
+          return;
+        }
 
         if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
         else if (state.mode === 3) handleBlankOnlyKey(e);
@@ -3074,16 +3081,47 @@
       });
 
       if (el.symbolBar) {
-        function pressSymbol(e) {
+        let symbolTouchX = 0;
+        let symbolTouchY = 0;
+        let symbolMoved = false;
+        let symbolTarget = null;
+        el.symbolBar.addEventListener("touchstart", function (e) {
+          if (!e.touches[0]) return;
+          symbolTouchX = e.touches[0].clientX;
+          symbolTouchY = e.touches[0].clientY;
+          symbolMoved = false;
+          symbolTarget = e.target.closest("[data-ch]");
+        }, { passive: true });
+        el.symbolBar.addEventListener("touchmove", function (e) {
+          if (!e.touches[0]) return;
+          if (
+            Math.abs(e.touches[0].clientX - symbolTouchX) > 8 ||
+            Math.abs(e.touches[0].clientY - symbolTouchY) > 8
+          ) {
+            symbolMoved = true;
+          }
+        }, { passive: true });
+        el.symbolBar.addEventListener("touchend", function (e) {
+          if (symbolMoved) return;
+          const t = e.changedTouches[0];
+          let keyEl = symbolTarget;
+          if (t) {
+            const hit = document.elementFromPoint(t.clientX, t.clientY);
+            if (hit && hit.closest) {
+              const fromHit = hit.closest("[data-ch]");
+              if (fromHit) keyEl = fromHit;
+            }
+          }
+          if (!keyEl) return;
           if (e.cancelable) e.preventDefault();
+          injectPracticeKey(keyEl.getAttribute("data-ch"));
+        }, { passive: false });
+        el.symbolBar.addEventListener("pointerdown", function (e) {
+          if (e.pointerType === "touch" || e.pointerType === "pen") return;
           const keyEl = e.target.closest("[data-ch]");
           if (!keyEl) return;
+          e.preventDefault();
           injectPracticeKey(keyEl.getAttribute("data-ch"));
-        }
-        el.symbolBar.addEventListener("touchstart", pressSymbol, { passive: false });
-        el.symbolBar.addEventListener("pointerdown", function (e) {
-          if (e.pointerType === "touch") return;
-          pressSymbol(e);
         });
       }
 
