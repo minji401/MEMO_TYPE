@@ -249,22 +249,21 @@
       right: 0;
       bottom: var(--kb-offset, 0px);
       z-index: 16;
+      align-items: stretch;
       gap: 6px;
       padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
       background: #2b2d30;
       border-top: 1px solid #3c3f43;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      touch-action: pan-x;
+      overflow: hidden;
+      touch-action: manipulation;
       -webkit-user-select: none;
       user-select: none;
     }
-    .symbol-bar::-webkit-scrollbar { display: none; }
+    .symbol-bar .symbol-nav,
     .symbol-bar .symbol-key {
-      flex: 0 0 auto;
-      min-width: 40px;
-      min-height: 40px;
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 44px;
       border: 0;
       border-radius: 8px;
       background: var(--bg-elev);
@@ -272,12 +271,24 @@
       font-family: "JetBrains Mono", monospace;
       font-size: 16px;
       font-weight: 600;
-      display: inline-flex;
+      display: flex;
       align-items: center;
       justify-content: center;
       user-select: none;
       -webkit-user-select: none;
       touch-action: manipulation;
+    }
+    .symbol-bar .symbol-nav {
+      flex: 0 0 44px;
+      color: var(--caret);
+      background: #25272a;
+    }
+    .symbol-bar .symbol-keys {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
     }
 
     .mobile-restart { display: none; }
@@ -797,18 +808,9 @@
       <button type="button" class="btn primary mobile-restart" id="mobileRestartBtn">다시 시작</button>
     </footer>
     <div class="symbol-bar" id="symbolBar" aria-label="코드 기호 빠른 입력">
-      <span class="symbol-key" role="button" data-ch="#">#</span>
-      <span class="symbol-key" role="button" data-ch="{">{</span>
-      <span class="symbol-key" role="button" data-ch="}">}</span>
-      <span class="symbol-key" role="button" data-ch="(">(</span>
-      <span class="symbol-key" role="button" data-ch=")">)</span>
-      <span class="symbol-key" role="button" data-ch="[">[</span>
-      <span class="symbol-key" role="button" data-ch="]">]</span>
-      <span class="symbol-key" role="button" data-ch="&lt;">&lt;</span>
-      <span class="symbol-key" role="button" data-ch="&gt;">&gt;</span>
-      <span class="symbol-key" role="button" data-ch=";">;</span>
-      <span class="symbol-key" role="button" data-ch='"'>"</span>
-      <span class="symbol-key" role="button" data-ch="'">'</span>
+      <span class="symbol-nav" role="button" data-dir="-1" aria-label="이전 기호">◀</span>
+      <div class="symbol-keys" id="symbolKeys"></div>
+      <span class="symbol-nav" role="button" data-dir="1" aria-label="다음 기호">▶</span>
     </div>
   </div>
 
@@ -1319,6 +1321,7 @@
         board: document.getElementById("board"),
         kbCatcher: document.getElementById("kbCatcher"),
         symbolBar: document.getElementById("symbolBar"),
+        symbolKeys: document.getElementById("symbolKeys"),
         finish: document.getElementById("finish"),
         hintBtn: document.getElementById("hintBtn"),
         soundBtn: document.getElementById("soundBtn"),
@@ -3176,13 +3179,61 @@
         blurPracticeInput();
       });
 
+      const SYMBOL_PAGES = [
+        ["{", "}", "(", ")", ";", "=", "#"],
+        ["[", "]", "*", "&", "\"", "'", "<", ">"],
+        ["+", "-", "/", "%", "!", "|", ":"]
+      ];
+      let symbolPage = 0;
+
+      function renderSymbolPage() {
+        if (!el.symbolKeys) return;
+        const page = SYMBOL_PAGES[symbolPage] || SYMBOL_PAGES[0];
+        el.symbolKeys.innerHTML = page.map(function (ch) {
+          return '<span class="symbol-key" role="button" data-ch="' + esc(ch) + '">' + esc(ch) + "</span>";
+        }).join("");
+      }
+
+      function shiftSymbolPage(dir) {
+        const n = SYMBOL_PAGES.length;
+        symbolPage = (symbolPage + dir % n + n) % n;
+        renderSymbolPage();
+        keepPracticeFocus();
+      }
+
       if (el.symbolBar) {
-        el.symbolBar.addEventListener("pointerdown", function (e) {
-          const keyEl = e.target.closest("[data-ch]");
+        let lastSymbolAct = 0;
+        function keepSymbolFocus(e) {
+          if (e.cancelable) e.preventDefault();
+          keepPracticeFocus();
+        }
+        function activateSymbolTarget(target) {
+          const now = performance.now();
+          if (now - lastSymbolAct < 50) return;
+          if (!target || !target.closest) return;
+          const nav = target.closest("[data-dir]");
+          if (nav) {
+            lastSymbolAct = now;
+            shiftSymbolPage(Number(nav.getAttribute("data-dir")));
+            return;
+          }
+          const keyEl = target.closest("[data-ch]");
           if (!keyEl) return;
-          e.preventDefault();
+          lastSymbolAct = now;
           injectPracticeKey(keyEl.getAttribute("data-ch"));
+        }
+        el.symbolBar.addEventListener("mousedown", keepSymbolFocus);
+        el.symbolBar.addEventListener("touchstart", keepSymbolFocus, { passive: false });
+        el.symbolBar.addEventListener("click", function (e) {
+          activateSymbolTarget(e.target);
         });
+        el.symbolBar.addEventListener("touchend", function (e) {
+          if (e.cancelable) e.preventDefault();
+          const t = e.changedTouches && e.changedTouches[0];
+          const hit = t ? document.elementFromPoint(t.clientX, t.clientY) : e.target;
+          activateSymbolTarget(hit);
+        }, { passive: false });
+        renderSymbolPage();
       }
 
       if (el.kbCatcher) {
