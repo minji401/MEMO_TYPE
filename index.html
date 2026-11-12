@@ -217,6 +217,7 @@
       padding: 28px 22px 180px 18px;
       outline: none;
       scroll-behavior: auto;
+      touch-action: manipulation;
     }
 
     .code-scroll:focus { outline: none; }
@@ -238,6 +239,7 @@
       font-size: 16px;
       z-index: 3;
       pointer-events: auto;
+      touch-action: manipulation;
     }
 
     .symbol-bar {
@@ -275,7 +277,7 @@
       justify-content: center;
       user-select: none;
       -webkit-user-select: none;
-      touch-action: pan-x;
+      touch-action: manipulation;
     }
 
     .mobile-restart { display: none; }
@@ -756,10 +758,10 @@
         lang="en"
         name="practice-catcher"
         autocomplete="off"
-        autocapitalize="none"
+        autocapitalize="off"
         autocorrect="off"
         spellcheck="false"
-        inputmode="verbatim"
+        inputmode="text"
         enterkeyhint="enter"
         data-lpignore="true"
         data-1p-ignore="true"
@@ -1365,7 +1367,8 @@
         lineIndex: 0,
         lineText: "",
         lineError: false,
-        lineDiff: null
+        lineDiff: null,
+        typedBuffer: ""
       };
 
       let audioCtx = null;
@@ -2266,6 +2269,8 @@
         if (state.mode === 1 || state.mode === 2) {
           state.index = skipIndent(0);
         }
+        state.typedBuffer = "";
+        if (el.kbCatcher) el.kbCatcher.value = "";
         saveSettings();
         render();
         updateStats();
@@ -2345,37 +2350,146 @@
         el.board.scrollTop = Math.max(0, targetRelativeTop - el.board.clientHeight * 0.4);
       }
 
-      function typingClassAt(pos, isMasked) {
-        const cls = ["ch"];
+      function paintCharSpan(pos) {
+        const node = charSpans[pos];
+        if (!node) return;
         const isDone = state.flags[pos] === 1;
         const isErr = state.flags[pos] === 2;
-        const isBlind = isMasked && state.charMask[pos] && !isDone;
-        if (isDone) cls.push("ok");
-        if (isErr) cls.push("bad");
-        if (isBlind) cls.push("blind");
-        if (pos === state.index) cls.push("caret");
-        return { cls: cls.join(" "), isBlind: isBlind && !isErr };
+        const isBlind = state.mode === 2 && state.charMask[pos] && !isDone;
+        if (isDone) node.classList.add("ok");
+        else node.classList.remove("ok");
+        if (isErr) node.classList.add("bad");
+        else node.classList.remove("bad");
+        if (isBlind) node.classList.add("blind");
+        else node.classList.remove("blind");
+        if (pos === state.index) node.classList.add("caret");
+        else node.classList.remove("caret");
+        if (state.mode === 2) {
+          const raw = state.source[pos] === "\n" ? " " : state.source[pos];
+          const want = isBlind && !isErr ? "_" : raw;
+          if (node.textContent !== want) node.textContent = want;
+        }
       }
 
-      function patchTypingChars(fromPos, toPos) {
+      function paintTypingRange(fromPos, toPos) {
         if (!charSpans.length || charSpans.length !== state.source.length) {
           renderTypingMode(state.mode === 2);
           return;
         }
-        const isMasked = state.mode === 2;
-        const start = Math.max(0, Math.min(fromPos, toPos) - 1);
-        const end = Math.min(charSpans.length - 1, Math.max(fromPos, toPos) + 1);
-        for (let pos = start; pos <= end; pos += 1) {
-          const info = typingClassAt(pos, isMasked);
-          charSpans[pos].className = info.cls;
-          if (isMasked) {
-            const raw = state.source[pos] === "\n" ? " " : state.source[pos];
-            charSpans[pos].textContent = info.isBlind ? "_" : raw;
-          }
-        }
+        const start = Math.max(0, Math.min(fromPos, toPos));
+        const end = Math.min(charSpans.length - 1, Math.max(fromPos, toPos));
+        for (let pos = start; pos <= end; pos += 1) paintCharSpan(pos);
         if (state.source[fromPos] === "\n" || state.source[toPos] === "\n") {
           scrollCaretIfNeeded();
         }
+      }
+
+      function replayTyped(typed) {
+        const src = state.source;
+        const flags = new Array(src.length).fill(0);
+        let i = skipIndent(0);
+        let consumed = 0;
+        for (let t = 0; t < typed.length && i < src.length; t += 1) {
+          const ch = typed[t];
+          if (ch === "\r") continue;
+          const expected = src[i];
+          if (ch === expected) {
+            flags[i] = 1;
+            i += 1;
+            if (ch === "\n") i = afterNewline(i);
+          } else {
+            flags[i] = 2;
+            i += 1;
+          }
+          consumed = t + 1;
+        }
+        return { index: i, flags: flags, consumed: consumed };
+      }
+
+      function syncCatcherValue() {
+        if (state.finished || el.overlay.classList.contains("show")) return;
+        if (state.mode !== 1 && state.mode !== 2 && state.mode !== 3) return;
+        if (!el.kbCatcher) return;
+        const typed = String(el.kbCatcher.value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        if (state.mode === 3) {
+          syncBlankFromTyped(typed);
+          return;
+        }
+        if (typed === state.typedBuffer) return;
+        const oldIndex = state.index;
+        const oldFlags = state.flags;
+        const snap = replayTyped(typed);
+        let lastSound = null;
+        for (let p = 0; p < state.source.length; p += 1) {
+          if (oldFlags[p] === 0 && snap.flags[p] === 1) {
+            state.keyCorrect += 1;
+            lastSound = false;
+          } else if (oldFlags[p] === 0 && snap.flags[p] === 2) {
+            state.keyWrong += 1;
+            lastSound = true;
+          }
+        }
+        if (typed.length > state.typedBuffer.length) startClock();
+        state.flags = snap.flags;
+        state.index = snap.index;
+        state.typedBuffer = typed.slice(0, snap.consumed);
+        if (typed.length !== state.typedBuffer.length && !state.composing) {
+          el.kbCatcher.value = state.typedBuffer;
+        }
+        if (lastSound != null) playClick(lastSound);
+        if (!charSpans.length || charSpans.length !== state.source.length) {
+          renderTypingMode(state.mode === 2);
+        } else {
+          for (let p = 0; p < state.source.length; p += 1) {
+            if (p === oldIndex || p === state.index || oldFlags[p] !== state.flags[p]) {
+              paintCharSpan(p);
+            }
+          }
+          if (state.source[oldIndex] === "\n" || state.source[state.index] === "\n") {
+            scrollCaretIfNeeded();
+          }
+        }
+        updateStats();
+        if (state.index >= state.source.length) complete();
+      }
+
+      function syncBlankFromTyped(typed) {
+        if (!state.blankOrder.length) return;
+        const tokIndex = state.blankOrder[state.blankPos];
+        const expected = state.tokens[tokIndex].text;
+        const next = typed.replace(/\n/g, "");
+        if (next === state.blankTyped) return;
+        startClock();
+        if (next.length > state.blankTyped.length) {
+          const added = next.slice(state.blankTyped.length);
+          for (let i = 0; i < added.length; i += 1) {
+            if (added[i] === expected[state.blankTyped.length + i]) {
+              state.keyCorrect += 1;
+              playClick(false);
+            } else {
+              state.keyWrong += 1;
+              playClick(true);
+            }
+          }
+        } else {
+          playClick(false);
+        }
+        state.blankTyped = next.slice(0, expected.length);
+        if (el.kbCatcher.value !== state.blankTyped) el.kbCatcher.value = state.blankTyped;
+        if (state.blankTyped === expected) {
+          state.blankPos += 1;
+          state.blankTyped = "";
+          el.kbCatcher.value = "";
+          state.typedBuffer = "";
+          if (state.blankPos >= state.blankOrder.length) {
+            render();
+            updateStats();
+            complete();
+            return;
+          }
+        }
+        render();
+        updateStats();
       }
 
       function renderTypingMode(isMasked) {
@@ -2548,13 +2662,28 @@
               state.index = afterNewline(state.index + 1);
             }
           }
+          if (el.kbCatcher) {
+            const rebuilt = [];
+            let i = skipIndent(0);
+            while (i < state.index) {
+              if (state.flags[i] === 0 && wasAutoIndent(i)) {
+                i += 1;
+                continue;
+              }
+              rebuilt.push(state.source[i]);
+              i += 1;
+            }
+            state.typedBuffer = rebuilt.join("");
+            el.kbCatcher.value = state.typedBuffer;
+          }
           if (state.index >= state.source.length) {
-            render();
+            paintTypingRange(0, Math.max(0, state.source.length - 1));
             updateStats();
             complete();
             return;
           }
-          render();
+          paintTypingRange(0, Math.max(0, state.source.length - 1));
+          scrollCaretIfNeeded();
           updateStats();
           return;
         }
@@ -2563,6 +2692,7 @@
           if (!state.blankOrder.length) return;
           state.blankPos += 1;
           state.blankTyped = "";
+          if (el.kbCatcher) el.kbCatcher.value = "";
           if (state.blankPos >= state.blankOrder.length) {
             render();
             updateStats();
@@ -2593,49 +2723,18 @@
 
       function handleTypingKey(e) {
         if (e.key === "Backspace") {
-          e.preventDefault();
-          if (state.index <= 0) return;
-          const from = state.index;
-          state.index -= 1;
-          state.flags[state.index] = 0;
-          while (state.index > 0 && wasAutoIndent(state.index - 1) && state.flags[state.index - 1] === 1) {
-            state.index -= 1;
-            state.flags[state.index] = 0;
-          }
-          playClick(false);
-          patchTypingChars(state.index, from);
+          if (e.preventDefault) e.preventDefault();
+          if (el.kbCatcher) el.kbCatcher.value = String(el.kbCatcher.value || "").slice(0, -1);
+          syncCatcherValue();
           return;
         }
-
         let ch = null;
         if (e.key === "Enter") ch = "\n";
         else if (e.key.length === 1) ch = e.key;
         if (ch == null) return;
-        e.preventDefault();
-        if (state.index >= state.source.length) return;
-        startClock();
-        const from = state.index;
-        const expected = state.source[state.index];
-        if (ch === expected) {
-          state.flags[state.index] = 1;
-          state.keyCorrect += 1;
-          playClick(false);
-        } else {
-          state.flags[state.index] = 2;
-          state.keyWrong += 1;
-          playClick(true);
-        }
-        state.index += 1;
-        if (ch === "\n" && expected === "\n") {
-          state.index = afterNewline(state.index);
-        }
-        if (state.index >= state.source.length) {
-          render();
-          updateStats();
-          complete();
-          return;
-        }
-        patchTypingChars(from, state.index);
+        if (e.preventDefault) e.preventDefault();
+        if (el.kbCatcher) el.kbCatcher.value = String(el.kbCatcher.value || "") + ch;
+        syncCatcherValue();
       }
 
       function wasAutoIndent(i) {
@@ -2771,15 +2870,6 @@
         return e.key === "Backspace" || e.key === "Enter" || (e.key && e.key.length === 1);
       }
 
-      function applyCatcherText(text) {
-        if (!text) return;
-        for (let i = 0; i < text.length; i += 1) {
-          const ch = text[i];
-          if (ch === "\r") continue;
-          injectPracticeKey(ch === "\n" ? "Enter" : ch);
-        }
-      }
-
       function focusPracticeInput() {
         if (state.finished || el.overlay.classList.contains("show")) return;
         updateCatcherLayer();
@@ -2815,16 +2905,18 @@
 
       function injectPracticeKey(key) {
         if (state.finished || el.overlay.classList.contains("show")) return;
-        const fake = {
-          key: key,
-          preventDefault: function () {},
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false
-        };
-        if (state.mode === 1 || state.mode === 2) handleTypingKey(fake);
-        else if (state.mode === 3) handleBlankOnlyKey(fake);
-        else if (key === "Enter") handleBlindLineKey(fake);
+        if (state.mode === 1 || state.mode === 2 || state.mode === 3) {
+          if (!el.kbCatcher) return;
+          if (key === "Backspace") {
+            el.kbCatcher.value = String(el.kbCatcher.value || "").slice(0, -1);
+          } else {
+            el.kbCatcher.value = String(el.kbCatcher.value || "") + (key === "Enter" ? "\n" : key);
+          }
+          syncCatcherValue();
+          keepPracticeFocus();
+          return;
+        }
+        if (key === "Enter") handleBlindLineKey({ key: "Enter", preventDefault: function () {} });
         else if (key === "Backspace") {
           state.lineText = String(state.lineText || "").slice(0, -1);
           playClick(false);
@@ -2878,20 +2970,24 @@
 
         if (state.finished) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.isComposing || e.keyCode === 229) return;
 
-        if (isImeKey(e)) return;
-        if (catcherIsActive() && isTypingKey(e)) {
-          if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
-          else if (state.mode === 3) handleBlankOnlyKey(e);
-          else handleBlindLineKey(e);
+        if (state.mode === 4) {
+          handleBlindLineKey(e);
           updateStats();
           return;
         }
 
-        if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
-        else if (state.mode === 3) handleBlankOnlyKey(e);
-        else handleBlindLineKey(e);
-        updateStats();
+        if (catcherIsActive() && isTypingKey(e)) return;
+
+        if (state.mode === 3) {
+          handleBlankOnlyKey(e);
+          if (el.kbCatcher) el.kbCatcher.value = state.blankTyped || "";
+          updateStats();
+          return;
+        }
+
+        if (isTypingKey(e)) handleTypingKey(e);
       }
 
       function onKeyUp(e) {
@@ -3081,43 +3177,7 @@
       });
 
       if (el.symbolBar) {
-        let symbolTouchX = 0;
-        let symbolTouchY = 0;
-        let symbolMoved = false;
-        let symbolTarget = null;
-        el.symbolBar.addEventListener("touchstart", function (e) {
-          if (!e.touches[0]) return;
-          symbolTouchX = e.touches[0].clientX;
-          symbolTouchY = e.touches[0].clientY;
-          symbolMoved = false;
-          symbolTarget = e.target.closest("[data-ch]");
-        }, { passive: true });
-        el.symbolBar.addEventListener("touchmove", function (e) {
-          if (!e.touches[0]) return;
-          if (
-            Math.abs(e.touches[0].clientX - symbolTouchX) > 8 ||
-            Math.abs(e.touches[0].clientY - symbolTouchY) > 8
-          ) {
-            symbolMoved = true;
-          }
-        }, { passive: true });
-        el.symbolBar.addEventListener("touchend", function (e) {
-          if (symbolMoved) return;
-          const t = e.changedTouches[0];
-          let keyEl = symbolTarget;
-          if (t) {
-            const hit = document.elementFromPoint(t.clientX, t.clientY);
-            if (hit && hit.closest) {
-              const fromHit = hit.closest("[data-ch]");
-              if (fromHit) keyEl = fromHit;
-            }
-          }
-          if (!keyEl) return;
-          if (e.cancelable) e.preventDefault();
-          injectPracticeKey(keyEl.getAttribute("data-ch"));
-        }, { passive: false });
         el.symbolBar.addEventListener("pointerdown", function (e) {
-          if (e.pointerType === "touch" || e.pointerType === "pen") return;
           const keyEl = e.target.closest("[data-ch]");
           if (!keyEl) return;
           e.preventDefault();
@@ -3126,47 +3186,15 @@
       }
 
       if (el.kbCatcher) {
-        el.kbCatcher.addEventListener("beforeinput", function (e) {
-          if (state.composing) return;
-          const type = e.inputType || "";
-          if (
-            type === "insertText" ||
-            type === "insertReplacementText" ||
-            type === "insertFromPaste" ||
-            type === "insertFromDrop" ||
-            type === "insertFromYank"
-          ) {
-            if (!e.data) return;
-            e.preventDefault();
-            applyCatcherText(e.data);
-            el.kbCatcher.value = "";
-            return;
-          }
-          if (type === "insertLineBreak" || type === "insertParagraph") {
-            e.preventDefault();
-            injectPracticeKey("Enter");
-            return;
-          }
-          if (type.indexOf("delete") === 0) {
-            e.preventDefault();
-            injectPracticeKey("Backspace");
-          }
-        });
         el.kbCatcher.addEventListener("compositionstart", function () {
           state.composing = true;
         });
-        el.kbCatcher.addEventListener("compositionend", function (e) {
+        el.kbCatcher.addEventListener("compositionend", function () {
           state.composing = false;
-          const data = e.data || el.kbCatcher.value || "";
-          el.kbCatcher.value = "";
-          applyCatcherText(data);
+          syncCatcherValue();
         });
         el.kbCatcher.addEventListener("input", function () {
-          if (state.composing) return;
-          const val = el.kbCatcher.value;
-          if (!val) return;
-          el.kbCatcher.value = "";
-          applyCatcherText(val);
+          syncCatcherValue();
         });
       }
 
