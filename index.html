@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>MEMO TYPE — 코드 암기 전용 타자 연습기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -220,6 +220,58 @@
     }
 
     .code-scroll:focus { outline: none; }
+
+    #kbCatcher {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      width: 1px;
+      height: 1px;
+      opacity: 0.01;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      resize: none;
+      overflow: hidden;
+      background: transparent;
+      color: transparent;
+      caret-color: transparent;
+      font-size: 16px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .symbol-bar {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: var(--kb-offset, 0px);
+      z-index: 16;
+      gap: 6px;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: #2b2d30;
+      border-top: 1px solid #3c3f43;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .symbol-bar::-webkit-scrollbar { display: none; }
+    .symbol-bar button {
+      flex: 0 0 auto;
+      min-width: 40px;
+      min-height: 40px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--bg-elev);
+      color: var(--text);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .mobile-restart { display: none; }
+    .pc-shortcuts, .pc-note { display: block; }
 
     .code {
       font-family: "JetBrains Mono", "Fira Code", "Courier New", monospace;
@@ -599,6 +651,33 @@
       .code { font-size: 14px; }
       .preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
+
+    @media (max-width: 768px) {
+      html, body, .app { height: 100dvh; }
+      .app { padding: 10px 10px 8px; }
+      .top-controls { justify-content: flex-start; }
+      .stats { gap: 10px; font-size: 11px; flex-wrap: wrap; }
+      .code { font-size: 13px; line-height: 1.65; }
+      .ln { width: 28px; flex: 0 0 28px; padding-right: 8px; font-size: 10px; }
+      .code-scroll {
+        padding: 14px 10px 20px 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .workspace { border-radius: 10px; }
+      .pc-shortcuts, .pc-note { display: none; }
+      .symbol-bar { display: flex; }
+      .mobile-restart {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 48px;
+        font-size: 16px;
+        margin-bottom: 52px;
+      }
+      footer { padding-top: 8px; }
+    }
   </style>
 </head>
 <body>
@@ -664,6 +743,17 @@
 
     <main class="workspace">
       <div class="code-scroll" id="board" tabindex="0"></div>
+      <textarea
+        id="kbCatcher"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        inputmode="text"
+        enterkeyhint="enter"
+        aria-hidden="true"
+        tabindex="-1"
+      ></textarea>
       <div class="finish" id="finish">
         <div>
           <h2>COMPLETE</h2>
@@ -680,7 +770,7 @@
     </main>
 
     <footer>
-      <div>
+      <div class="pc-shortcuts">
         <kbd>Tab</kbd> 모르는 빈칸/줄 스킵
         &nbsp;·&nbsp;
         <kbd>Tab</kbd> + <kbd>Enter</kbd> 재시작
@@ -689,8 +779,21 @@
         &nbsp;·&nbsp;
         <kbd>F2</kbd> 현재 줄 힌트
       </div>
-      <div>유연한 띄어쓰기 판정 · 주석 자동 제거 · 브라우저 자동 저장</div>
+      <div class="pc-note">유연한 띄어쓰기 판정 · 주석 자동 제거 · 브라우저 자동 저장</div>
+      <button type="button" class="btn primary mobile-restart" id="mobileRestartBtn">다시 시작</button>
     </footer>
+    <div class="symbol-bar" id="symbolBar" aria-label="코드 기호 빠른 입력">
+      <button type="button" data-ch="#">#</button>
+      <button type="button" data-ch="{">{</button>
+      <button type="button" data-ch="}">}</button>
+      <button type="button" data-ch=">(</button>
+      <button type="button" data-ch=")">)</button>
+      <button type="button" data-ch="[">[</button>
+      <button type="button" data-ch="]">]</button>
+      <button type="button" data-ch=";">;</button>
+      <button type="button" data-ch='"'>"</button>
+      <button type="button" data-ch="'">'</button>
+    </div>
   </div>
 
   <div class="overlay" id="overlay">
@@ -1198,6 +1301,8 @@
         userName: document.getElementById("userName"),
         logoutBtn: document.getElementById("logoutBtn"),
         board: document.getElementById("board"),
+        kbCatcher: document.getElementById("kbCatcher"),
+        symbolBar: document.getElementById("symbolBar"),
         finish: document.getElementById("finish"),
         hintBtn: document.getElementById("hintBtn"),
         soundBtn: document.getElementById("soundBtn"),
@@ -2149,7 +2254,7 @@
         saveSettings();
         render();
         updateStats();
-        el.board.focus();
+        focusPracticeInput();
       }
 
       function startClock() {
@@ -2201,6 +2306,7 @@
         el.finAcc.textContent = accuracyValue() + "%";
         el.finErr.textContent = String(state.keyWrong);
         el.finish.classList.add("show");
+        blurPracticeInput();
       }
 
       function render() {
@@ -2329,7 +2435,7 @@
           } else if (i === state.lineIndex) {
             html += '<span class="m3-input-wrap">';
             html += '<span class="m3-indent">' + esc(indent) + "</span>";
-            html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" />';
+            html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
             html += "</span>";
           } else {
             html += "&nbsp;";
@@ -2582,6 +2688,69 @@
         }
       }
 
+      function isTypingSurface(node) {
+        if (!node || !node.closest) return false;
+        if (node.closest(".finish")) return false;
+        return !!(
+          node.closest("#board") ||
+          node.closest("#kbCatcher") ||
+          node.closest("#symbolBar") ||
+          node.closest("#m3field") ||
+          node.closest(".workspace")
+        );
+      }
+
+      function focusPracticeInput() {
+        if (state.finished || el.overlay.classList.contains("show")) return;
+        if (state.mode === 4) {
+          const field = document.getElementById("m3field");
+          if (field) {
+            field.focus({ preventScroll: true });
+            return;
+          }
+        }
+        if (el.kbCatcher) el.kbCatcher.focus({ preventScroll: true });
+      }
+
+      function blurPracticeInput() {
+        if (el.kbCatcher) el.kbCatcher.blur();
+        const field = document.getElementById("m3field");
+        if (field) field.blur();
+      }
+
+      function injectPracticeKey(key) {
+        if (state.finished || el.overlay.classList.contains("show")) return;
+        const fake = {
+          key: key,
+          preventDefault: function () {},
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false
+        };
+        if (state.mode === 1 || state.mode === 2) handleTypingKey(fake);
+        else if (state.mode === 3) handleBlankOnlyKey(fake);
+        else if (key === "Enter") handleBlindLineKey(fake);
+        else if (key === "Backspace") {
+          state.lineText = String(state.lineText || "").slice(0, -1);
+          playClick(false);
+          render();
+        } else if (key.length === 1) {
+          state.lineText = String(state.lineText || "") + key;
+          startClock();
+          playClick(false);
+          render();
+        }
+        updateStats();
+        requestAnimationFrame(focusPracticeInput);
+      }
+
+      function syncMobileKbOffset() {
+        const vv = window.visualViewport;
+        let kb = 0;
+        if (vv) kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        document.documentElement.style.setProperty("--kb-offset", kb + "px");
+      }
+
       function onKeyDown(e) {
         if (e.key === "Escape") {
           e.preventDefault();
@@ -2655,7 +2824,7 @@
 
       function closeModal() {
         el.overlay.classList.remove("show");
-        el.board.focus();
+        focusPracticeInput();
       }
 
       function startFromModal() {
@@ -2732,7 +2901,7 @@
         state.sound = !state.sound;
         syncUIFromState();
         saveSettings();
-        el.board.focus();
+        focusPracticeInput();
       });
 
       document.getElementById("openModalBtn").addEventListener("click", function () {
@@ -2770,14 +2939,64 @@
         if (e.target === el.overlay) closeModal();
       });
 
-      el.board.addEventListener("click", function () {
-        if (state.mode === 4) {
-          const field = document.getElementById("m3field");
-          if (field) field.focus();
-        } else {
-          el.board.focus();
-        }
+      el.board.addEventListener("pointerdown", function () {
+        focusPracticeInput();
       });
+
+      document.addEventListener("pointerdown", function (e) {
+        if (el.overlay.classList.contains("show")) return;
+        if (isTypingSurface(e.target)) return;
+        blurPracticeInput();
+      });
+
+      if (el.symbolBar) {
+        el.symbolBar.addEventListener("pointerdown", function (e) {
+          e.preventDefault();
+          focusPracticeInput();
+        });
+        el.symbolBar.addEventListener("click", function (e) {
+          const btn = e.target.closest("button[data-ch]");
+          if (!btn) return;
+          injectPracticeKey(btn.getAttribute("data-ch"));
+        });
+      }
+
+      if (el.kbCatcher) {
+        el.kbCatcher.addEventListener("keydown", function (e) {
+          if (e.key === "Backspace" || e.key === "Enter" || (e.key && e.key.length === 1)) {
+            state.catcherKeydown = true;
+          }
+        });
+        el.kbCatcher.addEventListener("beforeinput", function (e) {
+          if (e.inputType === "deleteContentBackward" || e.inputType === "deleteContentForward") {
+            if (state.catcherKeydown) return;
+            e.preventDefault();
+            injectPracticeKey("Backspace");
+          }
+        });
+        el.kbCatcher.addEventListener("input", function () {
+          const val = el.kbCatcher.value;
+          el.kbCatcher.value = "";
+          if (state.catcherKeydown) {
+            state.catcherKeydown = false;
+            return;
+          }
+          if (!val) return;
+          for (let i = 0; i < val.length; i += 1) {
+            injectPracticeKey(val[i] === "\n" ? "Enter" : val[i]);
+          }
+        });
+      }
+
+      const mobileRestart = document.getElementById("mobileRestartBtn");
+      if (mobileRestart) mobileRestart.addEventListener("click", restart);
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncMobileKbOffset);
+        window.visualViewport.addEventListener("scroll", syncMobileKbOffset);
+      }
+      window.addEventListener("resize", syncMobileKbOffset);
+      syncMobileKbOffset();
 
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
