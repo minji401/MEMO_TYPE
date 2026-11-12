@@ -216,18 +216,17 @@
       overflow: auto;
       padding: 28px 22px 180px 18px;
       outline: none;
-      scroll-behavior: smooth;
+      scroll-behavior: auto;
     }
 
     .code-scroll:focus { outline: none; }
 
     #kbCatcher {
       position: absolute;
-      left: 12px;
-      bottom: 12px;
-      width: 1px;
-      height: 1px;
-      opacity: 0.01;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
       border: 0;
       padding: 0;
       margin: 0;
@@ -237,8 +236,8 @@
       color: transparent;
       caret-color: transparent;
       font-size: 16px;
-      z-index: 2;
-      pointer-events: none;
+      z-index: 3;
+      pointer-events: auto;
     }
 
     .symbol-bar {
@@ -255,9 +254,12 @@
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
     }
     .symbol-bar::-webkit-scrollbar { display: none; }
-    .symbol-bar button {
+    .symbol-bar .symbol-key {
       flex: 0 0 auto;
       min-width: 40px;
       min-height: 40px;
@@ -268,6 +270,12 @@
       font-family: "JetBrains Mono", monospace;
       font-size: 16px;
       font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
     }
 
     .mobile-restart { display: none; }
@@ -742,17 +750,21 @@
     </header>
 
     <main class="workspace">
-      <div class="code-scroll" id="board" tabindex="0"></div>
+      <div class="code-scroll" id="board"></div>
       <textarea
         id="kbCatcher"
+        lang="en"
+        name="practice-catcher"
         autocomplete="off"
-        autocapitalize="off"
+        autocapitalize="none"
         autocorrect="off"
         spellcheck="false"
-        inputmode="text"
+        inputmode="verbatim"
         enterkeyhint="enter"
+        data-lpignore="true"
+        data-1p-ignore="true"
         aria-hidden="true"
-        tabindex="-1"
+        tabindex="0"
       ></textarea>
       <div class="finish" id="finish">
         <div>
@@ -783,16 +795,18 @@
       <button type="button" class="btn primary mobile-restart" id="mobileRestartBtn">다시 시작</button>
     </footer>
     <div class="symbol-bar" id="symbolBar" aria-label="코드 기호 빠른 입력">
-      <button type="button" data-ch="#">#</button>
-      <button type="button" data-ch="{">{</button>
-      <button type="button" data-ch="}">}</button>
-      <button type="button" data-ch=">(</button>
-      <button type="button" data-ch=")">)</button>
-      <button type="button" data-ch="[">[</button>
-      <button type="button" data-ch="]">]</button>
-      <button type="button" data-ch=";">;</button>
-      <button type="button" data-ch='"'>"</button>
-      <button type="button" data-ch="'">'</button>
+      <span class="symbol-key" role="button" data-ch="#">#</span>
+      <span class="symbol-key" role="button" data-ch="{">{</span>
+      <span class="symbol-key" role="button" data-ch="}">}</span>
+      <span class="symbol-key" role="button" data-ch="(">(</span>
+      <span class="symbol-key" role="button" data-ch=")">)</span>
+      <span class="symbol-key" role="button" data-ch="[">[</span>
+      <span class="symbol-key" role="button" data-ch="]">]</span>
+      <span class="symbol-key" role="button" data-ch="&lt;">&lt;</span>
+      <span class="symbol-key" role="button" data-ch="&gt;">&gt;</span>
+      <span class="symbol-key" role="button" data-ch=";">;</span>
+      <span class="symbol-key" role="button" data-ch='"'>"</span>
+      <span class="symbol-key" role="button" data-ch="'">'</span>
     </div>
   </div>
 
@@ -1357,36 +1371,38 @@
       let audioCtx = null;
       function playClick(isError) {
         if (!state.sound) return;
-        try {
-          if (!audioCtx) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-          }
-          if (audioCtx.state === "suspended") audioCtx.resume();
-          const now = audioCtx.currentTime;
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          if (isError) {
-            osc.type = "sawtooth";
-            osc.frequency.setValueAtTime(160, now);
-            gain.gain.setValueAtTime(0.08, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(now);
-            osc.stop(now + 0.08);
-          } else {
-            osc.type = "triangle";
-            osc.frequency.setValueAtTime(620, now);
-            osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
-            gain.gain.setValueAtTime(0.12, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(now);
-            osc.stop(now + 0.025);
-          }
-        } catch (e) {}
+        setTimeout(function () {
+          try {
+            if (!audioCtx) {
+              const AudioContext = window.AudioContext || window.webkitAudioContext;
+              audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            if (isError) {
+              osc.type = "sawtooth";
+              osc.frequency.setValueAtTime(160, now);
+              gain.gain.setValueAtTime(0.08, now);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.start(now);
+              osc.stop(now + 0.08);
+            } else {
+              osc.type = "triangle";
+              osc.frequency.setValueAtTime(620, now);
+              osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
+              gain.gain.setValueAtTime(0.12, now);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.start(now);
+              osc.stop(now + 0.025);
+            }
+          } catch (err) {}
+        }, 0);
       }
 
       function saveSettings() {
@@ -2307,25 +2323,59 @@
         el.finErr.textContent = String(state.keyWrong);
         el.finish.classList.add("show");
         blurPracticeInput();
+        updateCatcherLayer();
       }
 
       function render() {
         el.hintBtn.hidden = state.mode !== 4;
+        updateCatcherLayer();
         if (state.mode === 1 || state.mode === 2) renderTypingMode(state.mode === 2);
         else if (state.mode === 3) renderMode3();
         else renderMode4();
-        requestAnimationFrame(scrollCaret);
+        requestAnimationFrame(scrollCaretIfNeeded);
       }
 
-      function scrollCaret() {
+      function scrollCaretIfNeeded() {
         const target = el.board.querySelector(".ch.caret, .inline-caret, .line.current-line");
-        if (target) {
-          const boardRect = el.board.getBoundingClientRect();
-          const targetRect = target.getBoundingClientRect();
-          const targetRelativeTop = targetRect.top - boardRect.top + el.board.scrollTop;
-          const targetScrollTop = targetRelativeTop - (el.board.clientHeight * 0.35);
-          el.board.scrollTop = Math.max(0, targetScrollTop);
+        if (!target) return;
+        const boardRect = el.board.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const pad = Math.max(40, el.board.clientHeight * 0.18);
+        if (targetRect.top >= boardRect.top + pad && targetRect.bottom <= boardRect.bottom - pad) return;
+        const targetRelativeTop = targetRect.top - boardRect.top + el.board.scrollTop;
+        el.board.scrollTop = Math.max(0, targetRelativeTop - el.board.clientHeight * 0.4);
+      }
+
+      function typingClassAt(pos, isMasked) {
+        const cls = ["ch"];
+        const isDone = state.flags[pos] === 1;
+        const isErr = state.flags[pos] === 2;
+        const isBlind = isMasked && state.charMask[pos] && !isDone;
+        if (isDone) cls.push("ok");
+        if (isErr) cls.push("bad");
+        if (isBlind) cls.push("blind");
+        if (pos === state.index) cls.push("caret");
+        return { cls: cls.join(" "), isBlind: isBlind && !isErr };
+      }
+
+      function patchTypingChars(fromPos, toPos) {
+        const spans = el.board.querySelectorAll(".code .ch");
+        if (!spans.length || spans.length !== state.source.length) {
+          renderTypingMode(state.mode === 2);
+          return;
         }
+        const isMasked = state.mode === 2;
+        const start = Math.max(0, Math.min(fromPos, toPos) - 1);
+        const end = Math.min(spans.length - 1, Math.max(fromPos, toPos) + 1);
+        for (let pos = start; pos <= end; pos += 1) {
+          const info = typingClassAt(pos, isMasked);
+          spans[pos].className = info.cls;
+          if (isMasked) {
+            const raw = state.source[pos] === "\n" ? " " : state.source[pos];
+            spans[pos].textContent = info.isBlind ? "_" : raw;
+          }
+        }
+        scrollCaretIfNeeded();
       }
 
       function renderTypingMode(isMasked) {
@@ -2544,6 +2594,7 @@
         if (e.key === "Backspace") {
           e.preventDefault();
           if (state.index <= 0) return;
+          const from = state.index;
           state.index -= 1;
           state.flags[state.index] = 0;
           while (state.index > 0 && wasAutoIndent(state.index - 1) && state.flags[state.index - 1] === 1) {
@@ -2551,7 +2602,7 @@
             state.flags[state.index] = 0;
           }
           playClick(false);
-          render();
+          patchTypingChars(state.index, from);
           return;
         }
 
@@ -2562,6 +2613,7 @@
         e.preventDefault();
         if (state.index >= state.source.length) return;
         startClock();
+        const from = state.index;
         const expected = state.source[state.index];
         if (ch === expected) {
           state.flags[state.index] = 1;
@@ -2582,7 +2634,7 @@
           complete();
           return;
         }
-        render();
+        patchTypingChars(from, state.index);
       }
 
       function wasAutoIndent(i) {
@@ -2700,22 +2752,64 @@
         );
       }
 
+      function updateCatcherLayer() {
+        if (!el.kbCatcher) return;
+        const off = state.finished || state.mode === 4 || el.overlay.classList.contains("show");
+        el.kbCatcher.style.pointerEvents = off ? "none" : "auto";
+      }
+
+      function catcherIsActive() {
+        return !!(el.kbCatcher && document.activeElement === el.kbCatcher);
+      }
+
+      function isImeKey(e) {
+        return !!(e.isComposing || e.keyCode === 229 || e.key === "Unidentified" || e.key === "Process");
+      }
+
+      function isTypingKey(e) {
+        return e.key === "Backspace" || e.key === "Enter" || (e.key && e.key.length === 1);
+      }
+
+      function applyCatcherText(text) {
+        if (!text) return;
+        for (let i = 0; i < text.length; i += 1) {
+          const ch = text[i];
+          if (ch === "\r") continue;
+          injectPracticeKey(ch === "\n" ? "Enter" : ch);
+        }
+      }
+
       function focusPracticeInput() {
         if (state.finished || el.overlay.classList.contains("show")) return;
+        updateCatcherLayer();
         if (state.mode === 4) {
           const field = document.getElementById("m3field");
-          if (field) {
+          if (field && document.activeElement !== field) {
             field.focus({ preventScroll: true });
-            return;
           }
+          return;
         }
-        if (el.kbCatcher) el.kbCatcher.focus({ preventScroll: true });
+        if (el.kbCatcher && document.activeElement !== el.kbCatcher) {
+          el.kbCatcher.focus({ preventScroll: true });
+        }
       }
 
       function blurPracticeInput() {
         if (el.kbCatcher) el.kbCatcher.blur();
         const field = document.getElementById("m3field");
         if (field) field.blur();
+      }
+
+      function keepPracticeFocus() {
+        const active = document.activeElement;
+        if (state.mode === 4) {
+          const field = document.getElementById("m3field");
+          if (field && active !== field) field.focus({ preventScroll: true });
+          return;
+        }
+        if (el.kbCatcher && active !== el.kbCatcher) {
+          el.kbCatcher.focus({ preventScroll: true });
+        }
       }
 
       function injectPracticeKey(key) {
@@ -2741,7 +2835,7 @@
           render();
         }
         updateStats();
-        requestAnimationFrame(focusPracticeInput);
+        keepPracticeFocus();
       }
 
       function syncMobileKbOffset() {
@@ -2783,6 +2877,9 @@
 
         if (state.finished) return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        if (catcherIsActive() && isTypingKey(e)) return;
+        if (isImeKey(e)) return;
 
         if (state.mode === 1 || state.mode === 2) handleTypingKey(e);
         else if (state.mode === 3) handleBlankOnlyKey(e);
@@ -2939,9 +3036,36 @@
         if (e.target === el.overlay) closeModal();
       });
 
-      el.board.addEventListener("pointerdown", function () {
+      function holdPracticeFocus(e) {
+        if (state.finished || el.overlay.classList.contains("show")) return;
+        if (e.target && e.target.closest && e.target.closest(".finish")) return;
+        if (e.cancelable) e.preventDefault();
         focusPracticeInput();
-      });
+      }
+
+      el.board.addEventListener("pointerdown", holdPracticeFocus);
+      el.board.addEventListener("touchstart", holdPracticeFocus, { passive: false });
+      if (el.kbCatcher) {
+        el.kbCatcher.addEventListener("wheel", function (e) {
+          el.board.scrollTop += e.deltaY;
+          el.board.scrollLeft += e.deltaX;
+          e.preventDefault();
+        }, { passive: false });
+        let touchY = 0;
+        let touchX = 0;
+        el.kbCatcher.addEventListener("touchstart", function (e) {
+          if (!e.touches[0]) return;
+          touchY = e.touches[0].clientY;
+          touchX = e.touches[0].clientX;
+        }, { passive: true });
+        el.kbCatcher.addEventListener("touchmove", function (e) {
+          if (!e.touches[0]) return;
+          el.board.scrollTop += touchY - e.touches[0].clientY;
+          el.board.scrollLeft += touchX - e.touches[0].clientX;
+          touchY = e.touches[0].clientY;
+          touchX = e.touches[0].clientX;
+        }, { passive: true });
+      }
 
       document.addEventListener("pointerdown", function (e) {
         if (el.overlay.classList.contains("show")) return;
@@ -2950,41 +3074,61 @@
       });
 
       if (el.symbolBar) {
+        function pressSymbol(e) {
+          if (e.cancelable) e.preventDefault();
+          const keyEl = e.target.closest("[data-ch]");
+          if (!keyEl) return;
+          injectPracticeKey(keyEl.getAttribute("data-ch"));
+        }
+        el.symbolBar.addEventListener("touchstart", pressSymbol, { passive: false });
         el.symbolBar.addEventListener("pointerdown", function (e) {
-          e.preventDefault();
-          focusPracticeInput();
-        });
-        el.symbolBar.addEventListener("click", function (e) {
-          const btn = e.target.closest("button[data-ch]");
-          if (!btn) return;
-          injectPracticeKey(btn.getAttribute("data-ch"));
+          if (e.pointerType === "touch") return;
+          pressSymbol(e);
         });
       }
 
       if (el.kbCatcher) {
-        el.kbCatcher.addEventListener("keydown", function (e) {
-          if (e.key === "Backspace" || e.key === "Enter" || (e.key && e.key.length === 1)) {
-            state.catcherKeydown = true;
-          }
-        });
         el.kbCatcher.addEventListener("beforeinput", function (e) {
-          if (e.inputType === "deleteContentBackward" || e.inputType === "deleteContentForward") {
-            if (state.catcherKeydown) return;
+          if (state.composing) return;
+          const type = e.inputType || "";
+          if (
+            type === "insertText" ||
+            type === "insertReplacementText" ||
+            type === "insertFromPaste" ||
+            type === "insertFromDrop" ||
+            type === "insertFromYank"
+          ) {
+            if (!e.data) return;
+            e.preventDefault();
+            applyCatcherText(e.data);
+            el.kbCatcher.value = "";
+            return;
+          }
+          if (type === "insertLineBreak" || type === "insertParagraph") {
+            e.preventDefault();
+            injectPracticeKey("Enter");
+            return;
+          }
+          if (type.indexOf("delete") === 0) {
             e.preventDefault();
             injectPracticeKey("Backspace");
           }
         });
-        el.kbCatcher.addEventListener("input", function () {
-          const val = el.kbCatcher.value;
+        el.kbCatcher.addEventListener("compositionstart", function () {
+          state.composing = true;
+        });
+        el.kbCatcher.addEventListener("compositionend", function (e) {
+          state.composing = false;
+          const data = e.data || el.kbCatcher.value || "";
           el.kbCatcher.value = "";
-          if (state.catcherKeydown) {
-            state.catcherKeydown = false;
-            return;
-          }
+          applyCatcherText(data);
+        });
+        el.kbCatcher.addEventListener("input", function () {
+          if (state.composing) return;
+          const val = el.kbCatcher.value;
           if (!val) return;
-          for (let i = 0; i < val.length; i += 1) {
-            injectPracticeKey(val[i] === "\n" ? "Enter" : val[i]);
-          }
+          el.kbCatcher.value = "";
+          applyCatcherText(val);
         });
       }
 
