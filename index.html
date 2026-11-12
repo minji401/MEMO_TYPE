@@ -242,18 +242,23 @@
       touch-action: manipulation;
     }
 
-    .symbol-bar {
+    .mobile-dock {
       display: none;
       position: fixed;
       left: 0;
       right: 0;
       bottom: var(--kb-offset, 0px);
       z-index: 16;
-      align-items: stretch;
-      gap: 6px;
       padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
       background: #2b2d30;
       border-top: 1px solid #3c3f43;
+      touch-action: manipulation;
+    }
+    .symbol-bar {
+      display: none;
+      align-items: stretch;
+      gap: 6px;
+      margin-top: 8px;
       overflow: hidden;
       touch-action: manipulation;
       -webkit-user-select: none;
@@ -687,17 +692,19 @@
       }
       .workspace { border-radius: 10px; }
       .pc-shortcuts, .pc-note { display: none; }
+      .mobile-dock { display: block; }
       .symbol-bar { display: flex; }
       .mobile-restart {
         display: flex;
         align-items: center;
         justify-content: center;
         width: 100%;
-        min-height: 48px;
+        min-height: 44px;
         font-size: 16px;
-        margin-bottom: 52px;
+        margin-bottom: 0;
       }
-      footer { padding-top: 8px; }
+      footer { display: none; }
+      .app { padding-bottom: 8px; }
     }
   </style>
 </head>
@@ -805,12 +812,14 @@
         <kbd>F2</kbd> 현재 줄 힌트
       </div>
       <div class="pc-note">유연한 띄어쓰기 판정 · 주석 자동 제거 · 브라우저 자동 저장</div>
-      <button type="button" class="btn primary mobile-restart" id="mobileRestartBtn">다시 시작</button>
     </footer>
-    <div class="symbol-bar" id="symbolBar" aria-label="코드 기호 빠른 입력">
-      <span class="symbol-nav" role="button" data-dir="-1" aria-label="이전 기호">◀</span>
-      <div class="symbol-keys" id="symbolKeys"></div>
-      <span class="symbol-nav" role="button" data-dir="1" aria-label="다음 기호">▶</span>
+    <div class="mobile-dock" id="mobileDock">
+      <button type="button" class="btn primary mobile-restart" id="mobileRestartBtn">다시 시작</button>
+      <div class="symbol-bar" id="symbolBar" aria-label="코드 기호 빠른 입력">
+        <span class="symbol-nav" role="button" data-dir="-1" aria-label="이전 기호">◀</span>
+        <div class="symbol-keys" id="symbolKeys"></div>
+        <span class="symbol-nav" role="button" data-dir="1" aria-label="다음 기호">▶</span>
+      </div>
     </div>
   </div>
 
@@ -2850,6 +2859,9 @@
           node.closest("#board") ||
           node.closest("#kbCatcher") ||
           node.closest("#symbolBar") ||
+          node.closest("#mobileDock") ||
+          node.closest("#mobileRestartBtn") ||
+          node.closest("#restartBtn") ||
           node.closest("#m3field") ||
           node.closest(".workspace")
         );
@@ -3053,7 +3065,11 @@
         resetPractice(false);
       }
 
+      let lastRestartAt = 0;
       function restart() {
+        const now = performance.now();
+        if (now - lastRestartAt < 250) return;
+        lastRestartAt = now;
         resetPractice(false);
       }
 
@@ -3250,7 +3266,19 @@
       }
 
       const mobileRestart = document.getElementById("mobileRestartBtn");
-      if (mobileRestart) mobileRestart.addEventListener("click", restart);
+      if (mobileRestart) {
+        function keepRestartFocus(e) {
+          if (e.cancelable) e.preventDefault();
+          keepPracticeFocus();
+        }
+        mobileRestart.addEventListener("mousedown", keepRestartFocus);
+        mobileRestart.addEventListener("touchstart", keepRestartFocus, { passive: false });
+        mobileRestart.addEventListener("click", restart);
+        mobileRestart.addEventListener("pointerup", function (e) {
+          if (e.pointerType === "mouse") return;
+          restart();
+        });
+      }
 
       if (window.visualViewport) {
         window.visualViewport.addEventListener("resize", syncMobileKbOffset);
