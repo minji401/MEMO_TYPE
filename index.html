@@ -1483,23 +1483,9 @@
         return out;
       }
 
-      function isPresetCode(code) {
-        const trimmed = String(code || "").trim();
-        if (!trimmed) return false;
-        return allPresetSnippets().some(function (item) {
-          return String(item.code).trim() === trimmed;
-        });
-      }
-
       function isBuiltInSnippet(item) {
-        if (!item) return true;
-        if (isBuiltInId(item.id)) return true;
-        if (isPresetCode(item.code)) return true;
-        const title = String(item.title || "").trim();
-        if (!title) return false;
-        return allPresetSnippets().some(function (preset) {
-          return preset.title === title;
-        });
+        if (!item) return false;
+        return isBuiltInId(item.id);
       }
 
       function snippetLang(item) {
@@ -1879,6 +1865,7 @@
         state.creatingSnippet = false;
         hideSnippetWarn();
         syncTitleField();
+        state.snippetId = snippet.id;
         if (fromModal) {
           fillModalFromSnippet(snippet);
           renderSnippetSelects();
@@ -1886,7 +1873,6 @@
           renderPresetButtons(el.modalLangSelect.value || state.lang);
           return;
         }
-        state.snippetId = snippet.id;
         state.raw = snippet.code;
         renderSnippetSelects();
         resetPractice(false);
@@ -1925,7 +1911,7 @@
         const resolvedTitle = title || (state.creatingSnippet ? "제목 없음" : ((findSnippet(state.snippetId) || {}).title || "제목 없음"));
         let snippet;
         const current = findSnippet(state.snippetId);
-        if (!state.creatingSnippet && current && !current.builtIn) {
+        if (!state.creatingSnippet && current && !isBuiltInSnippet(current)) {
           snippet = current;
           snippet.title = title ? resolvedTitle : snippet.title;
           snippet.code = code;
@@ -1957,14 +1943,21 @@
       }
 
       function deleteCurrentSnippet() {
-        const cur = findSnippet(state.snippetId);
-        if (!cur || cur.builtIn) {
+        const selectedId = (el.overlay.classList.contains("show") && el.modalSnippetSelect && el.modalSnippetSelect.value)
+          ? el.modalSnippetSelect.value
+          : state.snippetId;
+        const cur = findSnippet(selectedId);
+        if (!cur) {
+          window.alert("삭제할 코드를 먼저 목록에서 선택하세요.");
+          return;
+        }
+        if (isBuiltInSnippet(cur)) {
           window.alert("기본 연습 코드는 삭제할 수 없습니다. 내가 저장한 코드만 삭제됩니다.");
           return;
         }
         const ok = window.confirm("\"" + (cur.title || "제목 없음") + "\" 코드를 삭제할까요?");
         if (!ok) return;
-        const removedId = state.snippetId;
+        const removedId = cur.id;
         state.snippets = state.snippets.filter(function (item) {
           return item.id !== removedId;
         });
