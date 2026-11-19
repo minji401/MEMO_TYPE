@@ -58,11 +58,25 @@
       margin-bottom: 12px;
     }
 
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 12px;
+    }
+
     .brand {
       display: flex;
       align-items: center;
       gap: 12px;
-      align-self: flex-start;
+    }
+
+    .game-launch {
+      font-weight: 600;
+      color: var(--caret);
+      background: var(--caret-dim);
+      padding: 8px 16px;
     }
 
     .logo-mark {
@@ -668,6 +682,143 @@
       color: var(--text);
     }
 
+    .game-hud {
+      display: none;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      color: var(--sub);
+      flex-wrap: wrap;
+    }
+    body.game-play .game-hud { display: flex; }
+    body.game-play .top-controls,
+    body.game-play .stats,
+    body.game-play footer,
+    body.game-play #mobileRestartBtn { display: none !important; }
+    body.spot-game .symbol-bar { display: none !important; }
+    .game-hud b { color: var(--caret); font-weight: 600; margin-left: 6px; }
+    .game-hud .game-title-hud {
+      color: var(--text);
+      font-family: "Noto Sans KR", sans-serif;
+      font-weight: 600;
+      max-width: 40%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .countdown {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      place-items: center;
+      background: rgba(50, 52, 55, 0.92);
+      text-align: center;
+    }
+    .countdown.show { display: grid; }
+    .countdown-num {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 84px;
+      color: var(--caret);
+      font-weight: 600;
+      min-height: 100px;
+    }
+    .countdown-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      padding: 0 24px;
+    }
+    .countdown-title.show { opacity: 1; }
+    .countdown-title.fade { opacity: 0; }
+
+    .game-pick {
+      width: min(560px, 100%);
+      display: grid;
+      gap: 14px;
+    }
+    .game-pick-btn {
+      min-height: 96px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--bg-elev);
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    .game-pick-btn:hover {
+      color: var(--caret);
+      background: var(--bg-soft);
+    }
+    .game-pick-btn small {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--sub);
+    }
+
+    .game-range-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 48vh;
+      overflow: auto;
+      padding: 4px 2px 12px;
+    }
+    .game-range-group { color: var(--sub); font-size: 12px; margin: 8px 0 4px; }
+    .game-range-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--bg);
+      cursor: pointer;
+    }
+    .game-range-item input { accent-color: var(--caret); width: 16px; height: 16px; }
+
+    .spot-line { cursor: pointer; border-radius: 6px; }
+    .spot-line:hover .src { background: rgba(226, 183, 20, 0.08); }
+    .spot-line.found .src { background: rgba(226, 183, 20, 0.16); }
+    .spot-line.miss-flash .src { background: rgba(202, 71, 84, 0.28); }
+
+    .mypage-section { margin-bottom: 22px; }
+    .mypage-section h3 { font-size: 15px; margin-bottom: 10px; color: var(--caret); }
+    .record-list { display: flex; flex-direction: column; gap: 8px; }
+    .record-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .record-row span { color: var(--sub); }
+    .trend-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 36px;
+      margin-top: 6px;
+    }
+    .trend-bar i {
+      display: block;
+      width: 10px;
+      background: var(--caret);
+      border-radius: 2px 2px 0 0;
+      min-height: 2px;
+    }
+
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-thumb { background: #4c4f53; border-radius: 10px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -711,12 +862,15 @@
 <body>
   <div class="app">
     <header>
-      <div class="brand">
-        <div class="logo-mark">M</div>
-        <div>
-          <h1>MEMO TYPE</h1>
-          <p>코드 암기 전용 타자 연습기</p>
+      <div class="brand-row">
+        <div class="brand">
+          <div class="logo-mark">M</div>
+          <div>
+            <h1>MEMO TYPE</h1>
+            <p>코드 암기 전용 타자 연습기</p>
+          </div>
         </div>
+        <button type="button" class="btn game-launch" id="gameLaunchBtn">게임</button>
       </div>
 
       <div class="top-controls">
@@ -767,6 +921,12 @@
         <span>진행도<b id="statProg">0%</b></span>
         <span>오타<b id="statErr">0</b></span>
       </div>
+      <div class="game-hud" id="gameHud">
+        <span class="game-title-hud" id="gameTitleHud"></span>
+        <span>시간<b id="gameTimer">0</b>초</span>
+        <span id="gameMissWrap" hidden>오답<b id="gameMiss">0</b>/3</span>
+        <button type="button" class="btn" id="gameGiveUpBtn">포기</button>
+      </div>
     </header>
 
     <main class="workspace">
@@ -786,6 +946,12 @@
         aria-hidden="true"
         tabindex="0"
       ></textarea>
+      <div class="countdown" id="countdown" aria-hidden="true">
+        <div>
+          <div class="countdown-num" id="countdownNum"></div>
+          <div class="countdown-title" id="countdownTitle"></div>
+        </div>
+      </div>
       <div class="finish" id="finish">
         <div>
           <h2>COMPLETE</h2>
@@ -820,6 +986,48 @@
         <div class="symbol-keys" id="symbolKeys"></div>
         <span class="symbol-nav" role="button" data-dir="1" aria-label="다음 기호">▶</span>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="gamePickOverlay">
+    <div class="modal game-pick" role="dialog" aria-labelledby="gamePickTitle">
+      <div class="modal-header">
+        <h2 id="gamePickTitle">게임</h2>
+        <button type="button" class="btn ghost" id="gamePickClose">닫기</button>
+      </div>
+      <button type="button" class="game-pick-btn" data-game="recite">랜덤 백지 연습<small>고른 코드 중 하나를 백지로 칩니다</small></button>
+      <button type="button" class="game-pick-btn" data-game="spot">틀린 부분 찾기<small>바뀐 줄을 찾아 누릅니다</small></button>
+      <button type="button" class="game-pick-btn" data-game="mypage">마이페이지<small>타자·게임 기록과 상승 현황</small></button>
+    </div>
+  </div>
+
+  <div class="overlay" id="gameRangeOverlay">
+    <div class="modal" role="dialog" aria-labelledby="gameRangeTitle">
+      <div class="modal-header">
+        <h2 id="gameRangeTitle">연습 범위</h2>
+        <button type="button" class="btn ghost" id="gameRangeClose">닫기</button>
+      </div>
+      <p class="note">내가 만든 코드는 기본으로 선택되어 있습니다. 기본 연습 코드도 추가할 수 있습니다.</p>
+      <div class="modal-body">
+        <div class="game-range-list" id="gameRangeList"></div>
+      </div>
+      <div class="modal-actions">
+        <span></span>
+        <div>
+          <button type="button" class="btn" id="gameRangeCancel">취소</button>
+          <button type="button" class="btn primary" id="gameRangeStart">시작</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="mypageOverlay">
+    <div class="modal" role="dialog" aria-labelledby="mypageTitle">
+      <div class="modal-header">
+        <h2 id="mypageTitle">마이페이지</h2>
+        <button type="button" class="btn ghost" id="mypageClose">닫기</button>
+      </div>
+      <div class="modal-body" id="mypageBody"></div>
     </div>
   </div>
 
@@ -896,6 +1104,7 @@
     (function () {
       const STORAGE_KEY = "memotype_state_v5";
       const SNIPPETS_KEY = "typing_snippets";
+      const RECORDS_KEY = "memotype_records_v1";
 
       const KEYWORDS = {
         c: new Set([
@@ -1380,8 +1589,13 @@
         lineText: "",
         lineError: false,
         lineDiff: null,
-        typedBuffer: ""
+        typedBuffer: "",
+        play: null,
+        inputLocked: false,
+        records: [],
+        unsubRecords: null
       };
+      let countdownTimers = [];
 
       let audioCtx = null;
       let charSpans = [];
@@ -1556,6 +1770,10 @@
           state.unsubSnippets();
         }
         state.unsubSnippets = null;
+        if (typeof state.unsubRecords === "function") {
+          state.unsubRecords();
+        }
+        state.unsubRecords = null;
       }
 
       function applyCloudList(list) {
@@ -1628,6 +1846,7 @@
       function restoreLocalSnippets() {
         unsubscribeCloud();
         loadSnippets();
+        loadRecords();
         selectInitialSnippet();
         state.creatingSnippet = false;
         syncTitleField();
@@ -1745,6 +1964,7 @@
         await migrateLocalIfNeeded(user.uid);
         if (!state.user || state.user.uid !== user.uid) return;
         subscribeCloudSnippets(user.uid);
+        subscribeCloudRecords(user.uid);
       }
 
       function onUserSignedOut() {
@@ -2330,14 +2550,490 @@
         el.finWpm.textContent = String(wpmValue());
         el.finAcc.textContent = accuracyValue() + "%";
         el.finErr.textContent = String(state.keyWrong);
+        if (state.play && state.play.kind === "recite") {
+          saveRecord({
+            type: "game_recite",
+            result: "clear",
+            snippetId: state.play.snippetId,
+            title: state.play.title,
+            lang: state.lang,
+            durationSec: gameElapsedSec(),
+            errors: state.keyWrong,
+            wpm: wpmValue(),
+            acc: accuracyValue()
+          });
+          el.finish.querySelector("h2").textContent = "CLEAR";
+          el.finish.querySelector("p").textContent = "백지 연습 완료 · " + gameElapsedSec() + "초";
+        } else if (!state.play) {
+          const sn = findSnippet(state.snippetId);
+          saveRecord({
+            type: "practice",
+            result: "clear",
+            snippetId: state.snippetId,
+            title: sn ? sn.title : "코드",
+            lang: state.lang,
+            mode: state.mode,
+            wpm: wpmValue(),
+            acc: accuracyValue(),
+            errors: state.keyWrong
+          });
+          el.finish.querySelector("h2").textContent = "COMPLETE";
+          el.finish.querySelector("p").textContent = "이 코드를 손끝으로 완벽히 외웠습니다.";
+        }
         el.finish.classList.add("show");
         blurPracticeInput();
         updateCatcherLayer();
       }
 
-      function render() {
-        el.hintBtn.hidden = state.mode !== 4;
+      function loadRecords() {
+        try {
+          const saved = localStorage.getItem(RECORDS_KEY);
+          const parsed = saved ? JSON.parse(saved) : [];
+          state.records = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          state.records = [];
+        }
+      }
+
+      function persistRecords() {
+        if (state.user) return;
+        try {
+          localStorage.setItem(RECORDS_KEY, JSON.stringify(state.records.slice(0, 400)));
+        } catch (e) {}
+      }
+
+      function saveRecord(rec) {
+        rec.id = rec.id || ("rec_" + Date.now() + "_" + Math.floor(Math.random() * 1000));
+        rec.at = rec.at || new Date().toISOString();
+        state.records.unshift(rec);
+        if (isLoggedIn()) {
+          setDoc(doc(firebaseDb, "users", state.user.uid, "records", rec.id), rec, { merge: true }).catch(function () {});
+        } else {
+          persistRecords();
+        }
+      }
+
+      function subscribeCloudRecords(uid) {
+        if (typeof state.unsubRecords === "function") state.unsubRecords();
+        state.unsubRecords = onSnapshot(collection(firebaseDb, "users", uid, "records"), function (snap) {
+          const list = [];
+          snap.forEach(function (d) {
+            list.push(d.data() || {});
+          });
+          list.sort(function (a, b) {
+            return String(b.at || "").localeCompare(String(a.at || ""));
+          });
+          state.records = list;
+        });
+      }
+
+      function allSelectableSnippets() {
+        const mine = [];
+        const langs = Object.keys(PRESETS);
+        langs.forEach(function (lang) {
+          userSnippetsForLang(lang).forEach(function (item) { mine.push(item); });
+        });
+        (state.snippets || []).forEach(function (item) {
+          if (mine.some(function (m) { return m.id === item.id; })) return;
+          if (!isBuiltInSnippet(item)) mine.push(item);
+        });
+        const presets = allPresetSnippets();
+        return { mine: mine, presets: presets };
+      }
+
+      function findSnippetAny(id) {
+        return findSnippet(id) || allPresetSnippets().find(function (s) { return s.id === id; }) ||
+          (state.snippets || []).find(function (s) { return s.id === id; }) || null;
+      }
+
+      function clearCountdown() {
+        countdownTimers.forEach(function (t) { clearTimeout(t); });
+        countdownTimers = [];
+        const box = document.getElementById("countdown");
+        if (box) box.classList.remove("show");
+      }
+
+      function gameElapsedSec() {
+        if (!state.play || !state.play.startedAt) return 0;
+        const raw = Date.now() - state.play.startedAt + (state.play.penaltyMs || 0);
+        return Math.max(0, Math.floor(raw / 1000));
+      }
+
+      function updateGameHud() {
+        const timer = document.getElementById("gameTimer");
+        if (timer && state.play && state.play.startedAt) timer.textContent = String(gameElapsedSec());
+        const miss = document.getElementById("gameMiss");
+        if (miss && state.play) miss.textContent = String(state.play.misses || 0);
+      }
+
+      function setInputLocked(on) {
+        state.inputLocked = !!on;
         updateCatcherLayer();
+        if (on) blurPracticeInput();
+      }
+
+      function exitGame(opts) {
+        clearCountdown();
+        state.play = null;
+        setInputLocked(false);
+        document.body.classList.remove("game-play");
+        document.body.classList.remove("spot-game");
+        const hud = document.getElementById("gameHud");
+        if (hud) hud.style.display = "";
+        el.finish.classList.remove("show");
+        el.finish.querySelector("h2").textContent = "COMPLETE";
+        el.finish.querySelector("p").textContent = "이 코드를 손끝으로 완벽히 외웠습니다.";
+        if (!opts || !opts.keepBoard) resetPractice(false);
+      }
+
+      function giveUpGame() {
+        exitGame();
+      }
+
+      function openOverlay(id) {
+        const node = document.getElementById(id);
+        if (node) node.classList.add("show");
+      }
+      function closeOverlay(id) {
+        const node = document.getElementById(id);
+        if (node) node.classList.remove("show");
+      }
+
+      function renderGameRangeList() {
+        const box = document.getElementById("gameRangeList");
+        if (!box) return;
+        const packs = allSelectableSnippets();
+        let html = '<div class="game-range-group">내 코드</div>';
+        if (!packs.mine.length) html += '<div class="note">저장한 코드가 없습니다.</div>';
+        packs.mine.forEach(function (item) {
+          html += '<label class="game-range-item"><input type="checkbox" checked data-id="' + esc(item.id) + '" />' +
+            esc(item.title || "제목 없음") + ' <span>(' + esc((item.lang || "").toUpperCase()) + ")</span></label>";
+        });
+        html += '<div class="game-range-group">기본 코드</div>';
+        packs.presets.forEach(function (item) {
+          html += '<label class="game-range-item"><input type="checkbox" data-id="' + esc(item.id) + '" />' +
+            esc(item.title || "제목 없음") + ' <span>(' + esc((item.lang || "c").toUpperCase()) + ")</span></label>";
+        });
+        box.innerHTML = html;
+      }
+
+      function selectedRangeSnippets() {
+        const ids = [];
+        document.querySelectorAll("#gameRangeList input[type=checkbox]:checked").forEach(function (cb) {
+          ids.push(cb.getAttribute("data-id"));
+        });
+        return ids.map(findSnippetAny).filter(Boolean);
+      }
+
+      function startCountdown(title, thenFn) {
+        const box = document.getElementById("countdown");
+        const num = document.getElementById("countdownNum");
+        const cap = document.getElementById("countdownTitle");
+        setInputLocked(true);
+        box.classList.add("show");
+        cap.classList.remove("show", "fade");
+        cap.textContent = title || "";
+        const seq = ["3", "2", "1"];
+        function step(i) {
+          if (i < seq.length) {
+            num.textContent = seq[i];
+            num.style.display = "block";
+            cap.classList.remove("show");
+            countdownTimers.push(setTimeout(function () { step(i + 1); }, 1000));
+            return;
+          }
+          num.style.display = "none";
+          cap.classList.add("show");
+          countdownTimers.push(setTimeout(function () {
+            cap.classList.add("fade");
+            countdownTimers.push(setTimeout(function () {
+              box.classList.remove("show");
+              cap.classList.remove("show", "fade");
+              setInputLocked(false);
+              if (thenFn) thenFn();
+            }, 800));
+          }, 2000));
+        }
+        step(0);
+      }
+
+      function beginGamePlay(kind, snippet, pool) {
+        closeOverlay("gamePickOverlay");
+        closeOverlay("gameRangeOverlay");
+        const lang = snippetLang(snippet);
+        state.lang = lang;
+        state.raw = snippet.code;
+        state.snippetId = snippet.id;
+        state.play = {
+          kind: kind,
+          snippetId: snippet.id,
+          title: snippet.title || "코드",
+          pool: pool || [snippet],
+          penaltyMs: 0,
+          misses: 0,
+          startedAt: null,
+          errorLines: {},
+          found: {},
+          displayLines: null
+        };
+        document.body.classList.add("game-play");
+        document.body.classList.toggle("spot-game", kind === "spot");
+        document.getElementById("gameTitleHud").textContent = state.play.title;
+        document.getElementById("gameTimer").textContent = "0";
+        document.getElementById("gameMissWrap").hidden = kind !== "spot";
+        document.getElementById("gameMiss").textContent = "0";
+        if (kind === "recite") {
+          state.mode = 4;
+          resetPractice(false);
+          setInputLocked(true);
+          startCountdown(state.play.title, function () {
+            state.play.startedAt = Date.now();
+            focusPracticeInput();
+          });
+        } else {
+          const src = preprocess(snippet.code, lang);
+          const mutated = mutateForSpot(src, lang);
+          state.play.displayLines = mutated.lines;
+          state.play.errorLines = mutated.errors;
+          state.play.originalLines = mutated.original;
+          state.mode = 4;
+          state.source = src;
+          state.lines = src.split("\n");
+          state.finished = false;
+          el.finish.classList.remove("show");
+          renderSpotBoard();
+          setInputLocked(true);
+          startCountdown(state.play.title, function () {
+            state.play.startedAt = Date.now();
+          });
+        }
+      }
+
+      function isTypedefLine(line) {
+        return /^\s*typedef\b/.test(line);
+      }
+
+      function isDeclLine(line, lang) {
+        const t = String(line || "").trim();
+        if (!t) return false;
+        if (isTypedefLine(line)) return true;
+        if (lang === "python") {
+          if (/^\s*(global|nonlocal)\b/.test(t)) return true;
+          if (/^[A-Za-z_]\w*(\s*,\s*[A-Za-z_]\w*)*\s*=/.test(t) && t.indexOf("==") === -1 && t.indexOf("(") === -1) return true;
+          return false;
+        }
+        if (/^\s*(if|for|while|switch|return|else|case)\b/.test(t)) return false;
+        if (/^[A-Za-z_*\s]+\s+[A-Za-z_]\w*\s*\(/.test(t)) return false;
+        const declRe = /^(?:(?:unsigned|signed|static|const|volatile|extern|register|struct|enum|union|class|public|private|protected|final|abstract|virtual)\s+)*[_A-Za-z]\w*(?:\s*\*+\s*|\s+)[_A-Za-z]\w*/;
+        return declRe.test(t) && t.indexOf("(") === -1;
+      }
+
+      function identsIn(line) {
+        return String(line).match(/[_A-Za-z]\w*/g) || [];
+      }
+
+      function mutateForSpot(source, lang) {
+        const original = source.split("\n");
+        const lines = original.slice();
+        const kw = KEYWORDS[lang] || KEYWORDS.c;
+        const vars = [];
+        const funcs = [];
+        original.forEach(function (line) {
+          const names = identsIn(line);
+          if (isDeclLine(line, lang)) {
+            names.forEach(function (n) {
+              if (!kw.has(n) && vars.indexOf(n) === -1) vars.push(n);
+            });
+          }
+          const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
+          if (fn && !/^(if|for|while|switch|return|sizeof|catch)$/.test(fn[1])) {
+            if (funcs.indexOf(fn[1]) === -1) funcs.push(fn[1]);
+          }
+        });
+        const eligible = [];
+        original.forEach(function (line, i) {
+          if (!line.trim()) return;
+          if (isTypedefLine(line) || isDeclLine(line, lang)) return;
+          eligible.push(i);
+        });
+        for (let a = eligible.length - 1; a > 0; a -= 1) {
+          const b = Math.floor(Math.random() * (a + 1));
+          const tmp = eligible[a];
+          eligible[a] = eligible[b];
+          eligible[b] = tmp;
+        }
+        const errors = {};
+        const want = Math.max(1, Math.min(eligible.length, Math.ceil(eligible.length * 0.35)));
+        eligible.forEach(function (i) {
+          if (Object.keys(errors).length >= want) return;
+          let line = lines[i];
+          let done = false;
+          const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
+          if (usedVars.length && vars.length >= 2) {
+            const from = usedVars[Math.floor(Math.random() * usedVars.length)];
+            const others = vars.filter(function (v) { return v !== from; });
+            if (others.length) {
+              const to = others[Math.floor(Math.random() * others.length)];
+              lines[i] = line.replace(new RegExp("\\b" + from + "\\b"), to);
+              errors[i] = { type: "ident", from: from, to: to };
+              done = true;
+            }
+          }
+          if (!done && funcs.length >= 2) {
+            const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
+            if (fn && funcs.indexOf(fn[1]) !== -1) {
+              const others = funcs.filter(function (v) { return v !== fn[1]; });
+              if (others.length) {
+                const to = others[Math.floor(Math.random() * others.length)];
+                lines[i] = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
+                errors[i] = { type: "func", from: fn[1], to: to };
+                done = true;
+              }
+            }
+          }
+          if (!done && line.indexOf(";") !== -1) {
+            lines[i] = line.replace(";", "");
+            errors[i] = { type: "semi" };
+          }
+        });
+        if (!Object.keys(errors).length && eligible.length) {
+          const i = eligible[0];
+          if (lines[i].indexOf(";") !== -1) {
+            lines[i] = lines[i].replace(";", "");
+            errors[i] = { type: "semi" };
+          }
+        }
+        return { lines: lines, original: original, errors: errors };
+      }
+
+      function renderSpotBoard() {
+        const play = state.play;
+        if (!play || !play.displayLines) return;
+        let html = '<div class="code">';
+        play.displayLines.forEach(function (line, i) {
+          let cls = "line spot-line";
+          if (play.found[i]) cls += " found";
+          html += '<div class="' + cls + '" data-li="' + i + '"><span class="ln">' + (i + 1) + '</span><span class="src">' +
+            (line ? esc(line) : "&nbsp;") + "</span></div>";
+        });
+        html += "</div>";
+        el.board.innerHTML = html;
+        updateCatcherLayer();
+      }
+
+      function handleSpotClick(li) {
+        if (!state.play || state.play.kind !== "spot" || state.inputLocked || state.finished) return;
+        if (state.play.found[li]) return;
+        if (state.play.errorLines[li]) {
+          state.play.found[li] = true;
+          playClick(false);
+          const total = Object.keys(state.play.errorLines).length;
+          const got = Object.keys(state.play.found).length;
+          renderSpotBoard();
+          if (got >= total) {
+            state.finished = true;
+            saveRecord({
+              type: "game_spot",
+              result: "clear",
+              snippetId: state.play.snippetId,
+              title: state.play.title,
+              lang: state.lang,
+              durationSec: gameElapsedSec(),
+              errors: state.play.misses || 0
+            });
+            el.finWpm.textContent = String(gameElapsedSec());
+            el.finAcc.textContent = got + "/" + total;
+            el.finErr.textContent = String(state.play.misses || 0);
+            el.finish.querySelector("h2").textContent = "CLEAR";
+            el.finish.querySelector("p").textContent = "틀린 줄을 모두 찾았습니다.";
+            el.finish.classList.add("show");
+          }
+          return;
+        }
+        state.play.misses = (state.play.misses || 0) + 1;
+        playClick(true);
+        updateGameHud();
+        const row = el.board.querySelector('.spot-line[data-li="' + li + '"]');
+        if (row) {
+          row.classList.add("miss-flash");
+          setTimeout(function () { row.classList.remove("miss-flash"); }, 280);
+        }
+        if (state.play.misses >= 3) {
+          state.finished = true;
+          saveRecord({
+            type: "game_spot",
+            result: "out",
+            snippetId: state.play.snippetId,
+            title: state.play.title,
+            lang: state.lang,
+            durationSec: gameElapsedSec(),
+            errors: 3
+          });
+          el.finWpm.textContent = String(gameElapsedSec());
+          el.finAcc.textContent = "OUT";
+          el.finErr.textContent = "3";
+          el.finish.querySelector("h2").textContent = "OUT";
+          el.finish.querySelector("p").textContent = "오답 3번 · 게임 종료";
+          el.finish.classList.add("show");
+        }
+      }
+
+      function formatWhen(iso) {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "";
+        return d.getMonth() + 1 + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      }
+
+      function renderMyPage() {
+        const body = document.getElementById("mypageBody");
+        if (!body) return;
+        const practice = state.records.filter(function (r) { return r.type === "practice"; });
+        const games = state.records.filter(function (r) { return r.type === "game_recite" || r.type === "game_spot"; });
+        function rows(list, kind) {
+          if (!list.length) return '<p class="note">아직 기록이 없습니다.</p>';
+          return '<div class="record-list">' + list.slice(0, 30).map(function (r) {
+            let meta = "";
+            if (kind === "practice") meta = "WPM " + (r.wpm || 0) + " · " + (r.acc || 0) + "%";
+            else if (r.type === "game_recite") meta = (r.durationSec || 0) + "초 · 오타 " + (r.errors || 0);
+            else meta = (r.result === "out" ? "OUT" : "CLEAR") + " · " + (r.durationSec || 0) + "초";
+            return '<div class="record-row"><div><b>' + esc(r.title || "코드") + '</b><span> · ' +
+              formatWhen(r.at) + "</span></div><span>" + esc(meta) + "</span></div>";
+          }).join("") + "</div>";
+        }
+        const byCode = {};
+        practice.forEach(function (r) {
+          const key = r.snippetId || r.title || "기타";
+          if (!byCode[key]) byCode[key] = { title: r.title || "코드", items: [] };
+          byCode[key].items.push(r);
+        });
+        let trend = "";
+        Object.keys(byCode).forEach(function (key) {
+          const g = byCode[key];
+          const items = g.items.slice().reverse().slice(-12);
+          const max = Math.max(1, Math.max.apply(null, items.map(function (x) { return x.wpm || 0; })));
+          const bars = items.map(function (x) {
+            const h = Math.max(2, Math.round(((x.wpm || 0) / max) * 36));
+            return '<i title="WPM ' + (x.wpm || 0) + '" style="height:' + h + 'px"></i>';
+          }).join("");
+          const first = items[0] ? items[0].wpm : 0;
+          const last = items[items.length - 1] ? items[items.length - 1].wpm : 0;
+          trend += '<div class="record-row" style="flex-direction:column;align-items:stretch"><div><b>' +
+            esc(g.title) + "</b><span> WPM " + first + " → " + last + '</span></div><div class="trend-bar">' + bars + "</div></div>";
+        });
+        if (!trend) trend = '<p class="note">연습 기록이 쌓이면 코드별 상승이 표시됩니다.</p>';
+        body.innerHTML =
+          '<div class="mypage-section"><h3>타자 연습 기록</h3>' + rows(practice, "practice") + "</div>" +
+          '<div class="mypage-section"><h3>게임 기록</h3>' + rows(games, "game") + "</div>" +
+          '<div class="mypage-section"><h3>코드별 상승 현황</h3>' + trend + "</div>";
+      }
+
+      function render() {
+        el.hintBtn.hidden = state.mode !== 4 || !!state.play;
+        updateCatcherLayer();
+        if (state.play && state.play.kind === "spot") {
+          renderSpotBoard();
+          return;
+        }
         if (state.mode === 1 || state.mode === 2) renderTypingMode(state.mode === 2);
         else if (state.mode === 3) renderMode3();
         else renderMode4();
@@ -2412,6 +3108,7 @@
       }
 
       function syncCatcherValue() {
+        if (state.inputLocked || (state.play && state.play.kind === "spot")) return;
         if (state.finished || el.overlay.classList.contains("show")) return;
         if (state.mode !== 1 && state.mode !== 2 && state.mode !== 3) return;
         if (!el.kbCatcher) return;
@@ -2613,8 +3310,12 @@
           html += "</span></div>";
           if (i === state.lineIndex && state.lineError && state.lineDiff) {
             html += '<div class="diff-row">입력: ' + state.lineDiff.typed +
-              '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>' +
-              '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
+              '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>';
+            if (state.play && state.play.kind === "recite") {
+              html += '<span class="pass-guide">오답 · 3초 추가</span></div>';
+            } else {
+              html += '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
+            }
           }
         }
         if (!state.lines.length) {
@@ -2646,7 +3347,7 @@
       }
 
       function skipCurrentStep() {
-        if (state.finished) return;
+        if (state.finished || state.play) return;
         startClock();
         playClick(false);
 
@@ -2793,7 +3494,7 @@
       function handleBlindLineKey(e) {
         if (e.key !== "Enter") return;
         e.preventDefault();
-        if (state.finished) return;
+        if (state.finished || state.inputLocked) return;
         startClock();
 
         if (state.lineError) {
@@ -2837,6 +3538,10 @@
           state.keyWrong += 1;
           state.lineError = true;
           playClick(true);
+          if (state.play && state.play.kind === "recite") {
+            state.play.penaltyMs = (state.play.penaltyMs || 0) + 3000;
+            updateGameHud();
+          }
           state.lineDiff = {
             typed: esc(assembled || "(빈 줄)"),
             expected: esc(orig || "(빈 줄)")
@@ -2862,7 +3567,12 @@
 
       function updateCatcherLayer() {
         if (!el.kbCatcher) return;
-        const off = state.finished || state.mode === 4 || el.overlay.classList.contains("show");
+        const off = state.finished || state.mode === 4 || state.inputLocked ||
+          (state.play && state.play.kind === "spot") ||
+          el.overlay.classList.contains("show") ||
+          document.getElementById("gamePickOverlay").classList.contains("show") ||
+          document.getElementById("gameRangeOverlay").classList.contains("show") ||
+          document.getElementById("mypageOverlay").classList.contains("show");
         el.kbCatcher.style.pointerEvents = off ? "none" : "auto";
       }
 
@@ -2879,6 +3589,7 @@
       }
 
       function focusPracticeInput() {
+        if (state.inputLocked || (state.play && state.play.kind === "spot")) return;
         if (state.finished || el.overlay.classList.contains("show")) return;
         updateCatcherLayer();
         if (state.mode === 4) {
@@ -2912,6 +3623,7 @@
       }
 
       function injectPracticeKey(key) {
+        if (state.inputLocked || (state.play && state.play.kind === "spot")) return;
         if (state.finished || el.overlay.classList.contains("show")) return;
         if (state.mode === 1 || state.mode === 2 || state.mode === 3) {
           if (!el.kbCatcher) return;
@@ -2949,6 +3661,19 @@
       function onKeyDown(e) {
         if (e.key === "Escape") {
           e.preventDefault();
+          if (document.getElementById("gamePickOverlay").classList.contains("show")) {
+            closeOverlay("gamePickOverlay");
+            return;
+          }
+          if (document.getElementById("gameRangeOverlay").classList.contains("show")) {
+            closeOverlay("gameRangeOverlay");
+            return;
+          }
+          if (document.getElementById("mypageOverlay").classList.contains("show")) {
+            closeOverlay("mypageOverlay");
+            return;
+          }
+          if (state.play) return;
           if (el.overlay.classList.contains("show")) closeModal();
           else openModal();
           return;
@@ -2972,15 +3697,21 @@
         if (e.key === "Enter" && state.tabHeld) {
           e.preventDefault();
           state.tabComboUsed = true;
-          restart();
+          if (!state.play) restart();
           return;
         }
 
         if (state.finished) return;
+        if (state.inputLocked) {
+          if (e.key.length === 1 || e.key === "Enter" || e.key === "Backspace") e.preventDefault();
+          return;
+        }
+        if (state.play && state.play.kind === "spot") return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.isComposing || e.keyCode === 229) return;
 
         if (state.mode === 4) {
+          if (state.play && state.play.kind === "spot") return;
           handleBlindLineKey(e);
           updateStats();
           return;
@@ -3116,6 +3847,64 @@
         focusPracticeInput();
       });
 
+      let pendingGameKind = "";
+      document.getElementById("gameLaunchBtn").addEventListener("click", function () {
+        openOverlay("gamePickOverlay");
+      });
+      document.getElementById("gamePickClose").addEventListener("click", function () {
+        closeOverlay("gamePickOverlay");
+      });
+      document.getElementById("gamePickOverlay").addEventListener("click", function (e) {
+        if (e.target.id === "gamePickOverlay") closeOverlay("gamePickOverlay");
+      });
+      document.querySelectorAll("[data-game]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const kind = btn.getAttribute("data-game");
+          closeOverlay("gamePickOverlay");
+          if (kind === "mypage") {
+            renderMyPage();
+            openOverlay("mypageOverlay");
+            return;
+          }
+          pendingGameKind = kind;
+          document.getElementById("gameRangeTitle").textContent =
+            kind === "recite" ? "랜덤 백지 연습 · 범위" : "틀린 부분 찾기 · 범위";
+          renderGameRangeList();
+          openOverlay("gameRangeOverlay");
+        });
+      });
+      document.getElementById("gameRangeClose").addEventListener("click", function () {
+        closeOverlay("gameRangeOverlay");
+      });
+      document.getElementById("gameRangeCancel").addEventListener("click", function () {
+        closeOverlay("gameRangeOverlay");
+      });
+      document.getElementById("gameRangeOverlay").addEventListener("click", function (e) {
+        if (e.target.id === "gameRangeOverlay") closeOverlay("gameRangeOverlay");
+      });
+      document.getElementById("gameRangeStart").addEventListener("click", function () {
+        const list = selectedRangeSnippets();
+        if (!list.length) {
+          window.alert("코드를 하나 이상 선택하세요.");
+          return;
+        }
+        const pick = list[Math.floor(Math.random() * list.length)];
+        beginGamePlay(pendingGameKind, pick, list);
+      });
+      document.getElementById("mypageClose").addEventListener("click", function () {
+        closeOverlay("mypageOverlay");
+      });
+      document.getElementById("mypageOverlay").addEventListener("click", function (e) {
+        if (e.target.id === "mypageOverlay") closeOverlay("mypageOverlay");
+      });
+      document.getElementById("gameGiveUpBtn").addEventListener("click", giveUpGame);
+      el.board.addEventListener("click", function (e) {
+        if (!state.play || state.play.kind !== "spot") return;
+        const row = e.target.closest(".spot-line");
+        if (!row) return;
+        handleSpotClick(Number(row.getAttribute("data-li")));
+      });
+
       document.getElementById("openModalBtn").addEventListener("click", function () {
         openModal(false);
       });
@@ -3125,8 +3914,21 @@
       document.getElementById("modalDeleteBtn").addEventListener("click", deleteCurrentSnippet);
       document.getElementById("startBtn").addEventListener("click", startFromModal);
       document.getElementById("restartBtn").addEventListener("click", restart);
-      document.getElementById("againBtn").addEventListener("click", restart);
+      document.getElementById("againBtn").addEventListener("click", function () {
+        if (state.play && state.play.pool && state.play.pool.length) {
+          const kind = state.play.kind;
+          const pool = state.play.pool;
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          beginGamePlay(kind, pick, pool);
+          return;
+        }
+        restart();
+      });
       document.getElementById("finishEditBtn").addEventListener("click", function () {
+        if (state.play) {
+          exitGame();
+          return;
+        }
         openModal(false);
       });
 
@@ -3152,7 +3954,8 @@
       });
 
       function holdPracticeFocus(e) {
-        if (state.finished || el.overlay.classList.contains("show")) return;
+        if (state.play && state.play.kind === "spot") return;
+        if (state.inputLocked || state.finished || el.overlay.classList.contains("show")) return;
         if (e.target && e.target.closest && e.target.closest(".finish")) return;
         if (e.cancelable) e.preventDefault();
         focusPracticeInput();
@@ -3284,9 +4087,11 @@
       window.addEventListener("keyup", onKeyUp);
       setInterval(function () {
         if (state.startedAt && !state.finished) updateStats();
+        if (state.play && state.play.startedAt && !state.finished) updateGameHud();
       }, 250);
 
       loadSnippets();
+      loadRecords();
       loadSettings();
       renderAuthUI();
       getRedirectResult(firebaseAuth).catch(function (err) {
