@@ -86,11 +86,10 @@ test("range list checks user snippets and leaves presets unchecked", () => {
   assert.doesNotMatch(fn.split("packs.presets")[1], /checkbox" checked/);
 });
 
-test("countdown uses 3-2-1 then a 2s title hold before unlock", () => {
+test("countdown uses 3-2-1 then a 1s title hold before unlock", () => {
   const fn = extractFunction(html, "startCountdown");
   assert.match(fn, /\["3", "2", "1"\]/);
-  assert.match(fn, /1000/);
-  assert.match(fn, /2000/);
+  assert.match(fn, /cap.classList.add\("show"\);[\s\S]*?\}, 1000\)\)/);
   assert.match(fn, /setInputLocked\(true\)/);
   assert.match(fn, /setInputLocked\(false\)/);
 });
@@ -104,6 +103,15 @@ test("typing is locked until countdown finishes", () => {
 
 test("wrong recite line adds 3 seconds", () => {
   assert.match(html, /penaltyMs[\s\S]{0,80}\+ 3000/);
+});
+
+test("recite paints wrong chars instead of revealing the answer", () => {
+  assert.match(html, /function paintTypedChars/);
+  const render = extractFunction(html, "renderMode4");
+  assert.match(render, /recite-paint/);
+  assert.doesNotMatch(render, /오답 · 3초 추가/);
+  const enter = extractFunction(html, "handleBlindLineKey");
+  assert.match(enter, /if \(recitePlay\) \{[\s\S]*?state\.lineDiff = null/);
 });
 
 test("give up exits without saveRecord", () => {

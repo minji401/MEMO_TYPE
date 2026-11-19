@@ -424,6 +424,23 @@
       caret-color: var(--caret);
       white-space: pre;
     }
+    .recite-line {
+      position: relative;
+      flex: 1;
+      min-width: 1ch;
+    }
+    .recite-paint {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      white-space: pre;
+      color: var(--text);
+    }
+    .recite-paint .bad { color: var(--error); }
+    .m3-field.recite-ghost {
+      color: transparent;
+      caret-color: var(--caret);
+    }
     .m3-field::placeholder {
       color: var(--sub-alt);
       opacity: 1;
@@ -2788,7 +2805,7 @@
               setInputLocked(false);
               if (thenFn) thenFn();
             }, 800));
-          }, 2000));
+          }, 1000));
         }
         step(0);
       }
@@ -3362,22 +3379,27 @@
           if (i < state.lineIndex) {
             html += esc(line);
           } else if (i === state.lineIndex) {
+            const isRecite = !!(state.play && state.play.kind === "recite");
+            const expectedBody = line.slice(indent.length);
             html += '<span class="m3-input-wrap">';
             html += '<span class="m3-indent">' + esc(indent) + "</span>";
-            html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
+            if (isRecite) {
+              html += '<span class="recite-line">';
+              html += '<span class="recite-paint" id="recitePaint">' + paintTypedChars(state.lineText, expectedBody) + "</span>";
+              html += '<input class="m3-field recite-ghost" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
+              html += "</span>";
+            } else {
+              html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
+            }
             html += "</span>";
           } else {
             html += "&nbsp;";
           }
           html += "</span></div>";
-          if (i === state.lineIndex && state.lineError && state.lineDiff) {
+          if (i === state.lineIndex && state.lineError && state.lineDiff && !(state.play && state.play.kind === "recite")) {
             html += '<div class="diff-row">입력: ' + state.lineDiff.typed +
-              '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>';
-            if (state.play && state.play.kind === "recite") {
-              html += '<span class="pass-guide">오답 · 3초 추가</span></div>';
-            } else {
-              html += '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
-            }
+              '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>' +
+              '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
           }
         }
         if (!state.lines.length) {
@@ -3395,6 +3417,10 @@
           field.addEventListener("input", function () {
             state.lineText = field.value.replace(/\t/g, "    ");
             playClick(false);
+            if (state.play && state.play.kind === "recite") {
+              const paint = document.getElementById("recitePaint");
+              if (paint) paint.innerHTML = paintTypedChars(state.lineText, hint);
+            }
             if (state.lineError) {
               state.lineError = false;
               state.lineDiff = null;
@@ -3553,13 +3579,23 @@
         render();
       }
 
+      function paintTypedChars(typed, expected) {
+        let inner = "";
+        for (let c = 0; c < typed.length; c += 1) {
+          const ok = typed[c] === expected[c];
+          inner += '<span class="' + (ok ? "" : "bad") + '">' + esc(typed[c]) + "</span>";
+        }
+        return inner;
+      }
+
       function handleBlindLineKey(e) {
         if (e.key !== "Enter") return;
         e.preventDefault();
         if (state.finished || state.inputLocked) return;
         startClock();
 
-        if (state.lineError) {
+        const recitePlay = !!(state.play && state.play.kind === "recite");
+        if (state.lineError && !recitePlay) {
           clearLineHint();
           state.lineError = false;
           state.lineDiff = null;
@@ -3600,9 +3636,12 @@
           state.keyWrong += 1;
           state.lineError = true;
           playClick(true);
-          if (state.play && state.play.kind === "recite") {
+          if (recitePlay) {
             state.play.penaltyMs = (state.play.penaltyMs || 0) + 3000;
             updateGameHud();
+            state.lineDiff = null;
+            render();
+            return;
           }
           state.lineDiff = {
             typed: esc(assembled || "(빈 줄)"),
