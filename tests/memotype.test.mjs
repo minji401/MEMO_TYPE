@@ -63,16 +63,18 @@ function loadLogic() {
 
 const logic = loadLogic();
 
-test("HTML has game launch, pick, range, mypage, countdown, give-up", () => {
+test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="gameLaunchBtn"/);
   assert.match(html, />게임</);
   assert.match(html, /data-game="recite"/);
   assert.match(html, /data-game="spot"/);
-  assert.match(html, /data-game="mypage"/);
+  assert.doesNotMatch(html, /data-game="mypage"/);
+  assert.match(html, /id="mypageOpenBtn"/);
   assert.match(html, /id="countdown"/);
   assert.match(html, /id="gameGiveUpBtn"/);
   assert.match(html, /id="gameTimer"/);
   assert.match(html, /id="gameTitleHud"/);
+  assert.match(html, /id="gameLeft"/);
 });
 
 test("range list checks user snippets and leaves presets unchecked", () => {
@@ -170,6 +172,33 @@ test("spot mutations never rewrite protected lines or invent identifier typos", 
       }
     });
   }
+});
+
+test("spot mutation always yields at least one real changed line", () => {
+  const src = [
+    "typedef int Element;",
+    "int apple;",
+    "int banana;",
+    "void push(int x);",
+    "void pop(int x);",
+    "apple = banana;",
+    "push(apple);"
+  ].join("\n");
+  const out = logic.mutateForSpot(src, "c");
+  const n = Object.keys(out.errors).length;
+  assert.ok(n >= 1);
+  Object.keys(out.errors).forEach(function (key) {
+    const i = Number(key);
+    assert.notEqual(out.lines[i], out.original[i]);
+  });
+});
+
+test("spot HUD tracks remaining errors and clear uses left count", () => {
+  assert.match(html, /남은 오류/);
+  assert.match(html, /id="gameLeft"/);
+  const clickFn = extractFunction(html, "handleSpotClick");
+  assert.match(clickFn, /counts\.left <= 0/);
+  assert.match(clickFn, /CLEAR/);
 });
 
 test("spot allows at most one error per line", () => {

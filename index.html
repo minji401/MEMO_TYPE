@@ -687,6 +687,18 @@
       white-space: nowrap;
       color: var(--text);
     }
+    .user-chip-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .user-chip-btn:hover span { color: var(--caret); }
 
     .game-hud {
       display: none;
@@ -916,8 +928,10 @@
           <div class="auth-box">
             <button type="button" class="btn" id="googleLoginBtn">Google 로그인</button>
             <div class="user-chip" id="userChip">
-              <img id="userAvatar" alt="" />
-              <span id="userName"></span>
+              <button type="button" class="user-chip-btn" id="mypageOpenBtn" title="마이페이지">
+                <img id="userAvatar" alt="" />
+                <span id="userName"></span>
+              </button>
               <button type="button" class="btn ghost" id="logoutBtn">로그아웃</button>
             </div>
           </div>
@@ -934,7 +948,7 @@
       <div class="game-hud" id="gameHud">
         <span class="game-title-hud" id="gameTitleHud"></span>
         <span>시간<b id="gameTimer">0</b>초</span>
-        <span id="gameMissWrap" hidden>오답<b id="gameMiss">0</b>/3</span>
+        <span id="gameMissWrap" hidden>남은 오류<b id="gameLeft">0</b>/<b id="gameTotal">0</b> · 오답<b id="gameMiss">0</b>/3</span>
         <button type="button" class="btn" id="gameGiveUpBtn">포기</button>
       </div>
     </header>
@@ -1007,7 +1021,6 @@
       </div>
       <button type="button" class="game-pick-btn" data-game="recite">랜덤 백지 연습<small>고른 코드 중 하나를 백지로 칩니다</small></button>
       <button type="button" class="game-pick-btn" data-game="spot">틀린 부분 찾기<small>바뀐 줄을 찾아 누릅니다</small></button>
-      <button type="button" class="game-pick-btn" data-game="mypage">마이페이지<small>타자·게임 기록과 상승 현황</small></button>
     </div>
   </div>
 
@@ -2669,11 +2682,24 @@
         return Math.max(0, Math.floor(raw / 1000));
       }
 
+      function spotCounts() {
+        if (!state.play) return { total: 0, got: 0, left: 0 };
+        const total = Object.keys(state.play.errorLines || {}).length;
+        const got = Object.keys(state.play.found || {}).length;
+        return { total: total, got: got, left: Math.max(0, total - got) };
+      }
+
       function updateGameHud() {
+        if (!state.play) return;
         const timer = document.getElementById("gameTimer");
-        if (timer && state.play && state.play.startedAt) timer.textContent = String(gameElapsedSec());
+        if (timer && state.play.startedAt) timer.textContent = String(gameElapsedSec());
         const miss = document.getElementById("gameMiss");
-        if (miss && state.play) miss.textContent = String(state.play.misses || 0);
+        if (miss) miss.textContent = String(state.play.misses || 0);
+        const counts = spotCounts();
+        const leftEl = document.getElementById("gameLeft");
+        const totalEl = document.getElementById("gameTotal");
+        if (leftEl) leftEl.textContent = String(counts.left);
+        if (totalEl) totalEl.textContent = String(counts.total);
       }
 
       function setInputLocked(on) {
@@ -2803,6 +2829,12 @@
         } else {
           const src = preprocess(snippet.code, lang);
           const mutated = mutateForSpot(src, lang);
+          if (!Object.keys(mutated.errors).length) {
+            state.play = null;
+            document.body.classList.remove("game-play", "spot-game");
+            window.alert("이 코드는 찾을 오류를 만들 줄이 부족합니다. 다른 코드를 선택해 주세요.");
+            return;
+          }
           state.play.displayLines = mutated.lines;
           state.play.errorLines = mutated.errors;
           state.play.originalLines = mutated.original;
@@ -2812,9 +2844,11 @@
           state.finished = false;
           el.finish.classList.remove("show");
           renderSpotBoard();
+          updateGameHud();
           setInputLocked(true);
           startCountdown(state.play.title, function () {
             state.play.startedAt = Date.now();
+            updateGameHud();
           });
         }
       }
@@ -2884,9 +2918,12 @@
             const others = vars.filter(function (v) { return v !== from; });
             if (others.length) {
               const to = others[Math.floor(Math.random() * others.length)];
-              lines[i] = line.replace(new RegExp("\\b" + from + "\\b"), to);
-              errors[i] = { type: "ident", from: from, to: to };
-              done = true;
+              const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
+              if (nextLine !== line) {
+                lines[i] = nextLine;
+                errors[i] = { type: "ident", from: from, to: to };
+                done = true;
+              }
             }
           }
           if (!done && funcs.length >= 2) {
@@ -2895,22 +2932,36 @@
               const others = funcs.filter(function (v) { return v !== fn[1]; });
               if (others.length) {
                 const to = others[Math.floor(Math.random() * others.length)];
-                lines[i] = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
-                errors[i] = { type: "func", from: fn[1], to: to };
-                done = true;
+                const nextLine = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
+                if (nextLine !== line) {
+                  lines[i] = nextLine;
+                  errors[i] = { type: "func", from: fn[1], to: to };
+                  done = true;
+                }
               }
             }
           }
           if (!done && line.indexOf(";") !== -1) {
-            lines[i] = line.replace(";", "");
-            errors[i] = { type: "semi" };
+            const nextLine = line.replace(";", "");
+            if (nextLine !== line) {
+              lines[i] = nextLine;
+              errors[i] = { type: "semi" };
+            }
           }
         });
+        Object.keys(errors).forEach(function (key) {
+          const i = Number(key);
+          if (lines[i] === original[i]) delete errors[i];
+        });
         if (!Object.keys(errors).length && eligible.length) {
-          const i = eligible[0];
-          if (lines[i].indexOf(";") !== -1) {
-            lines[i] = lines[i].replace(";", "");
+          for (let e = 0; e < eligible.length; e += 1) {
+            const i = eligible[e];
+            if (original[i].indexOf(";") === -1) continue;
+            const nextLine = original[i].replace(";", "");
+            if (nextLine === original[i]) continue;
+            lines[i] = nextLine;
             errors[i] = { type: "semi" };
+            break;
           }
         }
         return { lines: lines, original: original, errors: errors };
@@ -2937,10 +2988,10 @@
         if (state.play.errorLines[li]) {
           state.play.found[li] = true;
           playClick(false);
-          const total = Object.keys(state.play.errorLines).length;
-          const got = Object.keys(state.play.found).length;
+          const counts = spotCounts();
+          updateGameHud();
           renderSpotBoard();
-          if (got >= total) {
+          if (counts.total > 0 && counts.left <= 0) {
             state.finished = true;
             saveRecord({
               type: "game_spot",
@@ -2952,11 +3003,12 @@
               errors: state.play.misses || 0
             });
             el.finWpm.textContent = String(gameElapsedSec());
-            el.finAcc.textContent = got + "/" + total;
+            el.finAcc.textContent = counts.got + "/" + counts.total;
             el.finErr.textContent = String(state.play.misses || 0);
             el.finish.querySelector("h2").textContent = "CLEAR";
             el.finish.querySelector("p").textContent = "틀린 줄을 모두 찾았습니다.";
             el.finish.classList.add("show");
+            blurPracticeInput();
           }
           return;
         }
@@ -3871,17 +3923,16 @@
         btn.addEventListener("click", function () {
           const kind = btn.getAttribute("data-game");
           closeOverlay("gamePickOverlay");
-          if (kind === "mypage") {
-            renderMyPage();
-            openOverlay("mypageOverlay");
-            return;
-          }
           pendingGameKind = kind;
           document.getElementById("gameRangeTitle").textContent =
             kind === "recite" ? "랜덤 백지 연습 · 범위" : "틀린 부분 찾기 · 범위";
           renderGameRangeList();
           openOverlay("gameRangeOverlay");
         });
+      });
+      document.getElementById("mypageOpenBtn").addEventListener("click", function () {
+        renderMyPage();
+        openOverlay("mypageOverlay");
       });
       document.getElementById("gameRangeClose").addEventListener("click", function () {
         closeOverlay("gameRangeOverlay");
