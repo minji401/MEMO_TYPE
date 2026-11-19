@@ -109,10 +109,11 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      justify-content: flex-end;
-      flex-wrap: nowrap;
+      justify-content: flex-start;
+      flex-wrap: wrap;
       width: 100%;
-      overflow-x: auto;
+      min-width: 0;
+      overflow: visible;
     }
 
     .lang-select, .snippet-select {
@@ -126,10 +127,13 @@
       font-weight: 600;
       cursor: pointer;
       outline: none;
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .snippet-select {
-      max-width: 240px;
+      max-width: min(240px, 100%);
       color: var(--text);
       font-family: "Noto Sans KR", sans-serif;
       font-weight: 500;
@@ -140,9 +144,9 @@
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      min-width: 172px;
+      min-width: 0;
       min-height: 38px;
-      flex-shrink: 0;
+      flex: 1 1 auto;
     }
 
     .modes, .diff-group {
@@ -194,6 +198,8 @@
       display: flex;
       gap: 8px;
       align-items: center;
+      flex-wrap: wrap;
+      margin-left: auto;
     }
 
     .btn {
@@ -833,6 +839,10 @@
       html, body, .app { height: 100dvh; }
       .app { padding: 10px 10px 8px; }
       .top-controls { justify-content: flex-start; }
+      .lang-select { min-width: 4.5rem; }
+      .snippet-select { flex: 1 1 140px; max-width: 100%; }
+      .modes { flex-wrap: wrap; }
+      .actions { margin-left: 0; width: 100%; }
       .stats { gap: 10px; font-size: 11px; flex-wrap: wrap; }
       .code { font-size: 13px; line-height: 1.65; }
       .ln { width: 28px; flex: 0 0 28px; padding-right: 8px; font-size: 10px; }
