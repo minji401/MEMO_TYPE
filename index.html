@@ -3050,6 +3050,24 @@
         return String(line).match(/[_A-Za-z]\w*/g) || [];
       }
 
+      function isSpotProtectedLine(line, lang) {
+        const t = String(line || "").trim();
+        if (!t) return true;
+        if (t.charAt(0) === "#") return true;
+        if (t === "{" || t === "}") return true;
+        // typedef struct closer like "} Stack;"
+        if (t.charAt(0) === "}" && /;\s*$/.test(t) && t.indexOf("(") === -1) return true;
+        if (isTypedefLine(line) || isDeclLine(line, lang)) return true;
+        return false;
+      }
+
+      function spotLineExistsElsewhere(candidate, original, index) {
+        for (let j = 0; j < original.length; j += 1) {
+          if (j !== index && original[j] === candidate) return true;
+        }
+        return false;
+      }
+
       function mutateForSpot(source, lang) {
         const original = source.split("\n");
         const lines = original.slice();
@@ -3070,8 +3088,7 @@
         });
         const eligible = [];
         original.forEach(function (line, i) {
-          if (!line.trim()) return;
-          if (isTypedefLine(line) || isDeclLine(line, lang)) return;
+          if (isSpotProtectedLine(line, lang)) return;
           eligible.push(i);
         });
         for (let a = eligible.length - 1; a > 0; a -= 1) {
@@ -3082,6 +3099,15 @@
         }
         const errors = {};
         const want = Math.max(1, Math.min(eligible.length, Math.ceil(eligible.length * 0.35)));
+
+        function acceptMutation(i, nextLine, meta) {
+          if (nextLine === lines[i]) return false;
+          if (spotLineExistsElsewhere(nextLine, original, i)) return false;
+          lines[i] = nextLine;
+          errors[i] = meta;
+          return true;
+        }
+
         eligible.forEach(function (i) {
           if (Object.keys(errors).length >= want) return;
           let line = lines[i];
@@ -3093,11 +3119,7 @@
             if (others.length) {
               const to = others[Math.floor(Math.random() * others.length)];
               const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
-              if (nextLine !== line) {
-                lines[i] = nextLine;
-                errors[i] = { type: "ident", from: from, to: to };
-                done = true;
-              }
+              if (acceptMutation(i, nextLine, { type: "ident", from: from, to: to })) done = true;
             }
           }
           if (!done && funcs.length >= 2) {
@@ -3107,20 +3129,13 @@
               if (others.length) {
                 const to = others[Math.floor(Math.random() * others.length)];
                 const nextLine = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
-                if (nextLine !== line) {
-                  lines[i] = nextLine;
-                  errors[i] = { type: "func", from: fn[1], to: to };
-                  done = true;
-                }
+                if (acceptMutation(i, nextLine, { type: "func", from: fn[1], to: to })) done = true;
               }
             }
           }
           if (!done && line.indexOf(";") !== -1) {
             const nextLine = line.replace(";", "");
-            if (nextLine !== line) {
-              lines[i] = nextLine;
-              errors[i] = { type: "semi" };
-            }
+            acceptMutation(i, nextLine, { type: "semi" });
           }
         });
         Object.keys(errors).forEach(function (key) {
@@ -3132,10 +3147,7 @@
             const i = eligible[e];
             if (original[i].indexOf(";") === -1) continue;
             const nextLine = original[i].replace(";", "");
-            if (nextLine === original[i]) continue;
-            lines[i] = nextLine;
-            errors[i] = { type: "semi" };
-            break;
+            if (acceptMutation(i, nextLine, { type: "semi" })) break;
           }
         }
         return { lines: lines, original: original, errors: errors };

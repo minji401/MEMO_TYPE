@@ -55,9 +55,14 @@ function loadLogic() {
     extractFunction(html, "isTypedefLine"),
     extractFunction(html, "isDeclLine"),
     extractFunction(html, "identsIn"),
+    extractFunction(html, "isSpotProtectedLine"),
+    extractFunction(html, "spotLineExistsElsewhere"),
     extractFunction(html, "mutateForSpot")
   ].join("\n");
-  const factory = new Function("KEYWORDS", bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, mutateForSpot };");
+  const factory = new Function(
+    "KEYWORDS",
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, mutateForSpot };"
+  );
   return factory(KEYWORDS);
 }
 
@@ -222,6 +227,41 @@ test("spot allows at most one error per line", () => {
       assert.ok(fromCount - still <= 1);
     }
   });
+});
+
+test("spot errors always differ and never camouflage as another original line", () => {
+  const src = [
+    "typedef int Element;",
+    "int apple;",
+    "int banana;",
+    "void push(int x);",
+    "void pop(int x);",
+    "void ClearStack(Stack* p);",
+    "void DestroyStack(Stack* p);",
+    "apple = banana;",
+    "push(apple);",
+    "pop(banana);",
+    "ClearStack(0);",
+    "DestroyStack(0);"
+  ].join("\n");
+
+  for (let n = 0; n < 80; n += 1) {
+    const out = logic.mutateForSpot(src, "c");
+    const errKeys = Object.keys(out.errors).map(Number).sort((a, b) => a - b);
+    const changed = [];
+    for (let i = 0; i < out.original.length; i += 1) {
+      if (out.original[i] !== out.lines[i]) changed.push(i);
+    }
+    assert.deepEqual(changed, errKeys);
+    errKeys.forEach(function (i) {
+      assert.notEqual(out.lines[i], out.original[i]);
+      assert.equal(
+        out.original.some(function (line, j) { return j !== i && line === out.lines[i]; }),
+        false,
+        "mutated line must not duplicate another original line"
+      );
+    });
+  }
 });
 
 test("practice complete saves a record; give-up path does not", () => {
