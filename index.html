@@ -965,6 +965,96 @@
 
     .mypage-section { margin-bottom: 22px; }
     .mypage-section h3 { font-size: 15px; margin-bottom: 10px; color: var(--caret); }
+    .mypage-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .mypage-summary .chip {
+      background: var(--bg);
+      border: 1px solid var(--sub-alt);
+      border-radius: 10px;
+      padding: 10px 14px;
+      min-width: 120px;
+    }
+    .mypage-summary .chip span {
+      display: block;
+      color: var(--sub);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .mypage-summary .chip b {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 20px;
+      color: var(--caret);
+      font-weight: 600;
+    }
+    .mypage-panel {
+      background: var(--bg);
+      border: 1px solid var(--sub-alt);
+      border-radius: 12px;
+      min-height: 320px;
+      padding: 16px;
+      overflow: auto;
+    }
+    .mypage-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .mypage-tabs button {
+      border: 1px solid var(--sub-alt);
+      background: var(--bg-soft);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .mypage-tabs button.active {
+      background: var(--caret-dim);
+      border-color: var(--caret);
+      color: var(--caret);
+      font-weight: 600;
+    }
+    .mypage-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 180px;
+      padding: 8px 4px 0;
+      border-bottom: 1px solid var(--sub-alt);
+    }
+    .mypage-chart .bar {
+      flex: 1;
+      min-width: 10px;
+      background: linear-gradient(180deg, var(--caret), #b89410);
+      border-radius: 4px 4px 0 0;
+      position: relative;
+    }
+    .mypage-chart .bar span {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--sub);
+      white-space: nowrap;
+    }
+    .mypage-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .mypage-table th,
+    .mypage-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--sub-alt);
+      text-align: left;
+    }
+    .mypage-table th { color: var(--sub); font-weight: 500; }
     .record-list { display: flex; flex-direction: column; gap: 8px; }
     .record-row {
       display: flex;
@@ -1138,14 +1228,13 @@
           <h2>COMPLETE</h2>
           <p>이 코드를 손끝으로 완벽히 외웠습니다.</p>
           <div class="finish-stats">
-            <div>WPM<b id="finWpm">0</b></div>
-            <div>정확도<b id="finAcc">100%</b></div>
-            <div>오타<b id="finErr">0</b></div>
+            <div><span id="finLabel1">WPM</span><b id="finWpm">0</b></div>
+            <div><span id="finLabel2">정확도</span><b id="finAcc">100%</b></div>
+            <div id="finErrWrap"><span id="finLabel3">오타</span><b id="finErr">0</b></div>
           </div>
           <div class="finish-actions">
             <button type="button" class="btn primary" id="againBtn">다시 하기</button>
             <button type="button" class="btn" id="finishPracticeBtn">연습하기</button>
-            <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
           </div>
         </div>
       </div>
@@ -1204,7 +1293,7 @@
         <h2 id="gamePickTitle">게임</h2>
         <button type="button" class="btn ghost" id="gamePickClose">닫기</button>
       </div>
-      <button type="button" class="game-pick-btn" data-game="recite">랜덤 백지 연습<small>고른 코드 중 하나를 백지로 칩니다</small></button>
+      <button type="button" class="game-pick-btn" data-game="recite">랜덤 백지 테스트<small>고른 코드 중 하나를 백지로 작성해 제출합니다</small></button>
       <button type="button" class="game-pick-btn" data-game="spot">틀린 부분 찾기<small>바뀐 줄을 찾아 누릅니다</small></button>
     </div>
   </div>
@@ -2918,6 +3007,29 @@
         el.statErr.textContent = String(state.keyWrong);
       }
 
+      function setFinishStats(kind, values) {
+        const l1 = document.getElementById("finLabel1");
+        const l2 = document.getElementById("finLabel2");
+        const l3 = document.getElementById("finLabel3");
+        const errWrap = document.getElementById("finErrWrap");
+        if (kind === "spot") {
+          if (l1) l1.textContent = "시간";
+          if (l2) l2.textContent = "오답";
+          if (errWrap) errWrap.hidden = true;
+          el.finWpm.textContent = String(values.time || 0);
+          el.finAcc.textContent = String(values.misses || 0);
+          el.finErr.textContent = "";
+        } else {
+          if (l1) l1.textContent = "WPM";
+          if (l2) l2.textContent = "정확도";
+          if (l3) l3.textContent = "오타";
+          if (errWrap) errWrap.hidden = false;
+          el.finWpm.textContent = String(values.wpm || 0);
+          el.finAcc.textContent = (values.acc || 0) + "%";
+          el.finErr.textContent = String(values.errors || 0);
+        }
+      }
+
       function complete() {
         if (state.play && state.play.kind === "recite") {
           submitReciteGame();
@@ -2925,9 +3037,11 @@
         }
         state.finished = true;
         updateStats();
-        el.finWpm.textContent = String(wpmValue());
-        el.finAcc.textContent = accuracyValue() + "%";
-        el.finErr.textContent = String(state.keyWrong);
+        setFinishStats("practice", {
+          wpm: wpmValue(),
+          acc: accuracyValue(),
+          errors: state.keyWrong
+        });
         if (!state.play) {
           const sn = findSnippet(state.snippetId);
           saveRecord({
@@ -3626,7 +3740,7 @@
         ranges.forEach(function (range) {
           if (!range.body || range.body.length < 2) return;
           const broken = range.body.filter(function (i) { return !!errors[i]; });
-          const keep = Math.max(1, Math.ceil(range.body.length * 0.4));
+          const keep = Math.max(1, Math.ceil(range.body.length * 0.5));
           const maxBroken = Math.max(0, range.body.length - keep);
           while (broken.length > maxBroken) {
             const drop = broken.pop();
@@ -3636,19 +3750,51 @@
         });
       }
 
+      function mutatePointerLine(line) {
+        const starred = line.match(/^(\s*(?:const\s+|static\s+)*)([A-Za-z_]\w*)(\s*)(\*+)(\s*)([A-Za-z_]\w*)/);
+        if (starred && !/^(if|for|while|switch|return|sizeof)$/.test(starred[2])) {
+          const stars = starred[4];
+          const nextStars = stars.length >= 3 ? stars.slice(0, stars.length - 1) : stars + "*";
+          return starred[1] + starred[2] + starred[3] + nextStars + starred[5] + starred[6] + line.slice(starred[0].length);
+        }
+        const plain = line.match(/^(\s*(?:const\s+|static\s+)*)([A-Za-z_]\w*)(\s+)([A-Za-z_]\w*)(?!\s*\()/);
+        if (plain && !/^(if|for|while|switch|return|sizeof|else)$/.test(plain[2])) {
+          return plain[1] + plain[2] + "*" + plain[3] + plain[4] + line.slice(plain[0].length);
+        }
+        return null;
+      }
+
+      function mutateTypeLine(line, types) {
+        const m = line.match(/^(\s*)([A-Za-z_]\w*)(\s+)([A-Za-z_]\w*\s*\()/);
+        if (!m) return null;
+        const others = types.filter(function (t) { return t !== m[2]; });
+        if (!others.length) return null;
+        const to = others[Math.floor(Math.random() * others.length)];
+        return m[1] + to + m[3] + m[4] + line.slice(m[0].length);
+      }
+
+      function mutateAddSemi(line) {
+        const t = String(line || "").trim();
+        if (!t || /;\s*$/.test(t)) return null;
+        if (!/^(if|for|while)\s*\(.*\)\s*$/.test(t)) return null;
+        return line.replace(/\s*$/, ";");
+      }
+
       function mutateForSpot(source, lang) {
         const original = source.split("\n");
         const lines = original.slice();
         const kw = KEYWORDS[lang] || KEYWORDS.c;
         const vars = [];
+        const types = ["void", "int", "char", "Element", "Boolean", "Stack", "Queue"];
         const callNames = [];
         const ranges = findFunctionRanges(original);
         const defNames = ranges.map(function (r) { return r.name; });
         original.forEach(function (line) {
           const names = identsIn(line);
-          if (isDeclLine(line, lang)) {
+          if (isDeclLine(line, lang) || isTypedefLine(line)) {
             names.forEach(function (n) {
               if (!kw.has(n) && vars.indexOf(n) === -1) vars.push(n);
+              if (/^[A-Z]/.test(n) && types.indexOf(n) === -1) types.push(n);
             });
           }
           const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
@@ -3669,11 +3815,10 @@
           eligible[b] = tmp;
         }
         const errors = {};
-        const want = Math.max(1, Math.min(eligible.length + 2, Math.ceil(Math.max(eligible.length, 1) * 0.35)));
-        const swappedFuncs = {};
+        const want = Math.max(2, Math.min(eligible.length + 3, Math.ceil(Math.max(eligible.length, 1) * 0.55)));
 
         function acceptMutation(i, nextLine, meta) {
-          if (nextLine === lines[i]) return false;
+          if (!nextLine || nextLine === lines[i]) return false;
           if (spotLineExistsElsewhere(nextLine, lines, i)) return false;
           lines[i] = nextLine;
           errors[i] = meta;
@@ -3687,44 +3832,28 @@
           return null;
         }
 
-        // 1) preprocessor rename (stdio.h -> stdbool.h)
+        // preprocessor rename
         const includeIdx = [];
         original.forEach(function (line, i) {
           if (mutateIncludeLine(line)) includeIdx.push(i);
         });
-        for (let a = includeIdx.length - 1; a > 0; a -= 1) {
-          const b = Math.floor(Math.random() * (a + 1));
-          const tmp = includeIdx[a];
-          includeIdx[a] = includeIdx[b];
-          includeIdx[b] = tmp;
-        }
         if (includeIdx.length && Object.keys(errors).length < want) {
-          const i = includeIdx[0];
-          const nextLine = mutateIncludeLine(original[i]);
-          if (nextLine) acceptMutation(i, nextLine, { type: "include" });
+          const i = includeIdx[Math.floor(Math.random() * includeIdx.length)];
+          acceptMutation(i, mutateIncludeLine(original[i]), { type: "include" });
         }
 
-        // 2) swap two function definition names (bodies stay for inference)
-        if (ranges.length >= 2 && Object.keys(errors).length < want) {
-          const order = ranges.slice();
-          for (let a = order.length - 1; a > 0; a -= 1) {
-            const b = Math.floor(Math.random() * (a + 1));
-            const tmp = order[a];
-            order[a] = order[b];
-            order[b] = tmp;
-          }
-          const left = order[0];
-          const right = order[1];
+        // function-name swap between two definitions (bodies stay)
+        if (ranges.length >= 2 && Object.keys(errors).length + 1 < want) {
+          const left = ranges[Math.floor(Math.random() * ranges.length)];
+          let right = ranges[Math.floor(Math.random() * ranges.length)];
           if (left.name !== right.name && !errors[left.start] && !errors[right.start]) {
-            const leftNext = original[left.start].replace(new RegExp("\\b" + left.name + "\\b"), right.name);
-            const rightNext = original[right.start].replace(new RegExp("\\b" + right.name + "\\b"), left.name);
-            if (leftNext !== original[left.start] && rightNext !== original[right.start]) {
+            const leftNext = lines[left.start].replace(new RegExp("\\b" + left.name + "\\b"), right.name);
+            const rightNext = lines[right.start].replace(new RegExp("\\b" + right.name + "\\b"), left.name);
+            if (leftNext !== lines[left.start] && rightNext !== lines[right.start]) {
               lines[left.start] = leftNext;
               lines[right.start] = rightNext;
               errors[left.start] = { type: "funcswap", from: left.name, to: right.name };
               errors[right.start] = { type: "funcswap", from: right.name, to: left.name };
-              swappedFuncs[left.name] = true;
-              swappedFuncs[right.name] = true;
             }
           }
         }
@@ -3735,48 +3864,54 @@
           let line = lines[i];
           let done = false;
           const range = lineRange(i);
-
-          // return value changes
-          if (/^\s*return\b/.test(line)) {
-            const nextLine = mutateReturnLine(line);
-            if (nextLine && acceptMutation(i, nextLine, { type: "return" })) done = true;
+          const strategies = ["pointer", "type", "ident", "func", "semi", "addsemi"];
+          for (let s = strategies.length - 1; s > 0; s -= 1) {
+            const r = Math.floor(Math.random() * (s + 1));
+            const tmp = strategies[s];
+            strategies[s] = strategies[r];
+            strategies[r] = tmp;
           }
 
-          // keep most of a swapped function body intact
-          if (!done && range && swappedFuncs[range.name] && range.body.indexOf(i) >= 0) {
-            return;
-          }
-
-          if (!done) {
-            const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
-            if (usedVars.length && vars.length >= 2) {
-              const from = usedVars[Math.floor(Math.random() * usedVars.length)];
-              const others = vars.filter(function (v) { return v !== from; });
-              if (others.length) {
-                const to = others[Math.floor(Math.random() * others.length)];
-                const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
-                if (acceptMutation(i, nextLine, { type: "ident", from: from, to: to })) done = true;
+          strategies.forEach(function (kind) {
+            if (done) return;
+            if (kind === "pointer") {
+              const nextLine = mutatePointerLine(line);
+              if (acceptMutation(i, nextLine, { type: "pointer" })) done = true;
+            } else if (kind === "type") {
+              const nextLine = mutateTypeLine(line, types);
+              if (acceptMutation(i, nextLine, { type: "rettype" })) done = true;
+            } else if (kind === "ident") {
+              const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
+              if (usedVars.length && vars.length >= 2) {
+                const from = usedVars[Math.floor(Math.random() * usedVars.length)];
+                const others = vars.filter(function (v) { return v !== from; });
+                if (others.length) {
+                  const to = others[Math.floor(Math.random() * others.length)];
+                  const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
+                  if (acceptMutation(i, nextLine, { type: "ident", from: from, to: to })) done = true;
+                }
               }
-            }
-          }
-
-          if (!done && funcs.length >= 2) {
-            const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
-            const isDef = range && range.start === i;
-            if (!isDef && fn && funcs.indexOf(fn[1]) !== -1) {
-              const others = funcs.filter(function (v) { return v !== fn[1]; });
-              if (others.length) {
-                const to = others[Math.floor(Math.random() * others.length)];
-                const nextLine = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
-                if (acceptMutation(i, nextLine, { type: "func", from: fn[1], to: to })) done = true;
+            } else if (kind === "func") {
+              const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
+              const isDef = range && range.start === i;
+              if (!isDef && fn && funcs.indexOf(fn[1]) !== -1 && funcs.length >= 2) {
+                const others = funcs.filter(function (v) { return v !== fn[1]; });
+                if (others.length) {
+                  const to = others[Math.floor(Math.random() * others.length)];
+                  const nextLine = line.replace(new RegExp("\\b" + fn[1] + "\\b"), to);
+                  if (acceptMutation(i, nextLine, { type: "func", from: fn[1], to: to })) done = true;
+                }
               }
+            } else if (kind === "semi") {
+              if (line.indexOf(";") !== -1) {
+                const nextLine = line.replace(";", "");
+                if (acceptMutation(i, nextLine, { type: "semi" })) done = true;
+              }
+            } else if (kind === "addsemi") {
+              const nextLine = mutateAddSemi(line);
+              if (acceptMutation(i, nextLine, { type: "addsemi" })) done = true;
             }
-          }
-
-          if (!done && line.indexOf(";") !== -1) {
-            const nextLine = line.replace(";", "");
-            acceptMutation(i, nextLine, { type: "semi" });
-          }
+          });
         });
 
         Object.keys(errors).forEach(function (key) {
@@ -3784,17 +3919,26 @@
           if (lines[i] === original[i]) delete errors[i];
         });
         enforceSpotBodyHints(original, lines, errors, ranges);
+
+        // insert unnecessary lines at end (never delete / never shift earlier lines)
+        if (Object.keys(errors).length < want) {
+          const junkPool = [
+            "    printf(\"debug\");",
+            "    puts(\"x\");",
+            "    return;"
+          ];
+          const junk = junkPool[Math.floor(Math.random() * junkPool.length)];
+          lines.push(junk);
+          errors[lines.length - 1] = { type: "insert" };
+        }
+
         if (!Object.keys(errors).length) {
           for (let e = 0; e < original.length; e += 1) {
-            const nextInclude = mutateIncludeLine(original[e]);
-            if (nextInclude && acceptMutation(e, nextInclude, { type: "include" })) break;
-            if (/^\s*return\b/.test(original[e])) {
-              const nextRet = mutateReturnLine(original[e]);
-              if (nextRet && acceptMutation(e, nextRet, { type: "return" })) break;
-            }
+            if (acceptMutation(e, mutateIncludeLine(original[e]), { type: "include" })) break;
+            if (acceptMutation(e, mutatePointerLine(original[e]), { type: "pointer" })) break;
+            if (acceptMutation(e, mutateAddSemi(original[e]), { type: "addsemi" })) break;
             if (!isSpotProtectedLine(original[e], lang) && original[e].indexOf(";") !== -1) {
-              const nextSemi = original[e].replace(";", "");
-              if (acceptMutation(e, nextSemi, { type: "semi" })) break;
+              if (acceptMutation(e, original[e].replace(";", ""), { type: "semi" })) break;
             }
           }
         }
@@ -3836,9 +3980,10 @@
               durationSec: gameElapsedSec(),
               errors: state.play.misses || 0
             });
-            el.finWpm.textContent = String(gameElapsedSec());
-            el.finAcc.textContent = counts.got + "/" + counts.total;
-            el.finErr.textContent = String(state.play.misses || 0);
+            setFinishStats("spot", {
+              time: gameElapsedSec(),
+              misses: state.play.misses || 0
+            });
             el.finish.querySelector("h2").textContent = "CLEAR";
             el.finish.querySelector("p").textContent = "틀린 줄을 모두 찾았습니다.";
             el.finish.classList.add("show");
@@ -3865,9 +4010,10 @@
             durationSec: gameElapsedSec(),
             errors: 3
           });
-          el.finWpm.textContent = String(gameElapsedSec());
-          el.finAcc.textContent = "OUT";
-          el.finErr.textContent = "3";
+          setFinishStats("spot", {
+            time: gameElapsedSec(),
+            misses: 3
+          });
           el.finish.querySelector("h2").textContent = "OUT";
           el.finish.querySelector("p").textContent = "오답 3번 · 게임 종료";
           el.finish.classList.add("show");
@@ -3897,29 +4043,73 @@
         focusPracticeInput();
       }
 
-      function renderMyPage() {
-        const body = document.getElementById("mypageBody");
-        if (!body) return;
+      function avgOf(list, key) {
+        if (!list.length) return 0;
+        let sum = 0;
+        list.forEach(function (r) { sum += Number(r[key] || 0); });
+        return Math.round(sum / list.length);
+      }
+
+      function renderMyPageChart(values, unit) {
+        if (!values.length) return '<p class="note">아직 데이터가 없습니다.</p>';
+        const max = Math.max(1, Math.max.apply(null, values.map(function (v) { return v.value; })));
+        return '<div class="mypage-chart">' + values.map(function (v) {
+          const h = Math.max(4, Math.round((v.value / max) * 160));
+          return '<div class="bar" style="height:' + h + 'px" title="' + esc(v.label) + ": " + v.value + unit +
+            '"><span>' + v.value + "</span></div>";
+        }).join("") + "</div>";
+      }
+
+      function renderMyPageTable(rows, cols) {
+        if (!rows.length) return '<p class="note">아직 기록이 없습니다.</p>';
+        let html = '<table class="mypage-table"><thead><tr>';
+        cols.forEach(function (c) { html += "<th>" + esc(c) + "</th>"; });
+        html += "</tr></thead><tbody>";
+        rows.forEach(function (row) {
+          html += "<tr>";
+          row.forEach(function (cell) { html += "<td>" + cell + "</td>"; });
+          html += "</tr>";
+        });
+        html += "</tbody></table>";
+        return html;
+      }
+
+      function myPagePanelHtml(tab) {
         const practice = state.records.filter(function (r) { return r.type === "practice"; });
-        const games = state.records.filter(function (r) { return r.type === "game_recite" || r.type === "game_spot"; });
-        function rows(list, kind) {
-          if (!list.length) return '<p class="note">아직 기록이 없습니다.</p>';
-          return '<div class="record-list">' + list.slice(0, 30).map(function (r) {
-            let meta = "";
-            if (kind === "practice") meta = "WPM " + (r.wpm || 0) + " · " + (r.acc || 0) + "%";
-            else {
-              const tag = r.result === "out"
-                ? '<span class="result-out">OUT</span>'
-                : '<span class="result-clear">CLEAR</span>';
-              if (r.type === "game_recite") {
-                meta = tag + " · " + (r.durationSec || 0) + "초 · 틀린 줄 " + (r.errors || 0);
-              } else {
-                meta = tag + " · " + (r.durationSec || 0) + "초";
-              }
-            }
-            return '<div class="record-row"><div><b>' + esc(r.title || "코드") + '</b><span> · ' +
-              formatWhen(r.at) + "</span></div><span>" + meta + "</span></div>";
-          }).join("") + "</div>";
+        const recite = state.records.filter(function (r) { return r.type === "game_recite"; });
+        const spot = state.records.filter(function (r) { return r.type === "game_spot"; });
+        if (tab === "speed") {
+          const recent = practice.slice(0, 16).reverse().map(function (r, i) {
+            return { label: String(i + 1), value: r.wpm || 0 };
+          });
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>타자 속도 (WPM)</h3>" + renderMyPageChart(recent, " WPM");
+        }
+        if (tab === "practice") {
+          const rows = practice.slice(0, 40).map(function (r) {
+            return [esc(r.title || "코드"), formatWhen(r.at), String(r.wpm || 0), (r.acc || 0) + "%", String(r.errors || 0)];
+          });
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>연습 기록</h3>" +
+            renderMyPageTable(rows, ["코드", "시각", "WPM", "정확도", "오타"]);
+        }
+        if (tab === "recite") {
+          const rows = recite.slice(0, 40).map(function (r) {
+            const tag = r.result === "out"
+              ? '<span class="result-out">OUT</span>'
+              : '<span class="result-clear">CLEAR</span>';
+            return [esc(r.title || "코드"), formatWhen(r.at), tag, (r.durationSec || 0) + "초", String(r.errors || 0)];
+          });
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>랜덤 백지 테스트</h3>" +
+            renderMyPageTable(rows, ["코드", "시각", "결과", "시간", "틀린 줄"]);
+        }
+        if (tab === "spot") {
+          const rows = spot.slice(0, 40).map(function (r) {
+            const tag = r.result === "out"
+              ? '<span class="result-out">OUT</span>'
+              : '<span class="result-clear">CLEAR</span>';
+            return [esc(r.title || "코드"), formatWhen(r.at), tag, (r.durationSec || 0) + "초", String(r.errors || 0)];
+          });
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>틀린 부분 찾기</h3>" +
+            renderMyPageTable(rows, ["코드", "시각", "결과", "시간", "오답"]);
         }
         const byCode = {};
         practice.forEach(function (r) {
@@ -3927,25 +4117,54 @@
           if (!byCode[key]) byCode[key] = { title: r.title || "코드", items: [] };
           byCode[key].items.push(r);
         });
-        let trend = "";
-        Object.keys(byCode).forEach(function (key) {
+        const keys = Object.keys(byCode);
+        if (!keys.length) return '<p class="note">연습 기록이 쌓이면 코드별 상승이 표시됩니다.</p>';
+        return "<h3 style='margin-bottom:12px;color:var(--caret)'>코드별 추이</h3>" + keys.map(function (key) {
           const g = byCode[key];
-          const items = g.items.slice().reverse().slice(-12);
-          const max = Math.max(1, Math.max.apply(null, items.map(function (x) { return x.wpm || 0; })));
-          const bars = items.map(function (x) {
-            const h = Math.max(2, Math.round(((x.wpm || 0) / max) * 36));
-            return '<i title="WPM ' + (x.wpm || 0) + '" style="height:' + h + 'px"></i>';
-          }).join("");
-          const first = items[0] ? items[0].wpm : 0;
-          const last = items[items.length - 1] ? items[items.length - 1].wpm : 0;
-          trend += '<div class="record-row" style="flex-direction:column;align-items:stretch"><div><b>' +
-            esc(g.title) + "</b><span> WPM " + first + " → " + last + '</span></div><div class="trend-bar">' + bars + "</div></div>";
-        });
-        if (!trend) trend = '<p class="note">연습 기록이 쌓이면 코드별 상승이 표시됩니다.</p>';
+          const items = g.items.slice().reverse().slice(-12).map(function (x, i) {
+            return { label: String(i + 1), value: x.wpm || 0 };
+          });
+          return '<div style="margin-bottom:18px"><b>' + esc(g.title) + "</b>" + renderMyPageChart(items, " WPM") + "</div>";
+        }).join("");
+      }
+
+      function renderMyPage() {
+        const body = document.getElementById("mypageBody");
+        if (!body) return;
+        if (!state.mypageTab) state.mypageTab = "speed";
+        const practice = state.records.filter(function (r) { return r.type === "practice"; });
+        const games = state.records.filter(function (r) { return r.type === "game_recite" || r.type === "game_spot"; });
+        const clears = games.filter(function (r) { return r.result === "clear"; }).length;
+        const tabs = [
+          { id: "speed", label: "타자속도" },
+          { id: "practice", label: "연습기록" },
+          { id: "recite", label: "백지테스트" },
+          { id: "spot", label: "틀린부분찾기" },
+          { id: "trend", label: "코드별추이" }
+        ];
         body.innerHTML =
-          '<div class="mypage-section"><h3>타자 연습 기록</h3>' + rows(practice, "practice") + "</div>" +
-          '<div class="mypage-section"><h3>게임 기록</h3>' + rows(games, "game") + "</div>" +
-          '<div class="mypage-section"><h3>코드별 상승 현황</h3>' + trend + "</div>";
+          '<div class="mypage-summary">' +
+          '<div class="chip"><span>평균 WPM</span><b>' + avgOf(practice, "wpm") + "</b></div>" +
+          '<div class="chip"><span>평균 정확도</span><b>' + avgOf(practice, "acc") + "%</b></div>" +
+          '<div class="chip"><span>게임 CLEAR</span><b>' + clears + "</b></div>" +
+          '<div class="chip"><span>전체 기록</span><b>' + state.records.length + "</b></div>" +
+          "</div>" +
+          '<div class="mypage-panel" id="mypagePanel">' + myPagePanelHtml(state.mypageTab) + "</div>" +
+          '<div class="mypage-tabs" id="mypageTabs">' +
+          tabs.map(function (t) {
+            return '<button type="button" data-tab="' + t.id + '" class="' +
+              (state.mypageTab === t.id ? "active" : "") + '">' + t.label + "</button>";
+          }).join("") +
+          "</div>";
+        const tabBox = document.getElementById("mypageTabs");
+        if (tabBox) {
+          tabBox.addEventListener("click", function (e) {
+            const btn = e.target.closest("button[data-tab]");
+            if (!btn) return;
+            state.mypageTab = btn.getAttribute("data-tab");
+            renderMyPage();
+          });
+        }
       }
 
       function render() {
@@ -4802,7 +5021,7 @@
           closeOverlay("gamePickOverlay");
           pendingGameKind = kind;
           document.getElementById("gameRangeTitle").textContent =
-            kind === "recite" ? "랜덤 백지 연습 · 범위" : "틀린 부분 찾기 · 범위";
+            kind === "recite" ? "랜덤 백지 테스트 · 범위" : "틀린 부분 찾기 · 범위";
           renderGameRangeList();
           openOverlay("gameRangeOverlay");
         });
@@ -4892,14 +5111,6 @@
         state.finished = false;
         updateCatcherLayer();
         focusPracticeInput();
-      });
-      document.getElementById("finishEditBtn").addEventListener("click", function () {
-        if (state.play) {
-          exitGame();
-          openModal(false);
-          return;
-        }
-        openModal(false);
       });
 
       el.snippetSelect.addEventListener("change", function () {
