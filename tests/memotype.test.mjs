@@ -61,11 +61,14 @@ function loadLogic() {
     extractFunction(html, "mutateReturnLine"),
     extractFunction(html, "mutateIncludeLine"),
     extractFunction(html, "enforceSpotBodyHints"),
-    extractFunction(html, "mutateForSpot")
+    extractFunction(html, "mutateForSpot"),
+    extractFunction(html, "gradeKeywordSet"),
+    extractFunction(html, "tokenizeForGrade"),
+    extractFunction(html, "compareCodesFlexible")
   ].join("\n");
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, enforceSpotBodyHints, mutateForSpot };"
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, compareCodesFlexible };"
   );
   return factory(KEYWORDS);
 }
@@ -124,17 +127,41 @@ test("typing is locked until countdown finishes", () => {
   assert.match(extractFunction(html, "syncCatcherValue"), /state\.inputLocked/);
 });
 
-test("wrong recite line adds 3 seconds", () => {
-  assert.match(html, /penaltyMs[\s\S]{0,80}\+ 3000/);
+test("recite game uses free editor submit and large result modal", () => {
+  assert.match(html, /id="reciteEditor"/);
+  assert.match(html, /id="reciteSubmitBtn"/);
+  assert.match(html, /id="reciteResultOverlay"/);
+  assert.match(html, /recite-result-modal/);
+  assert.match(html, /80vh/);
+  assert.match(extractFunction(html, "submitReciteGame"), /compareCodesFlexible/);
+  assert.match(extractFunction(html, "showReciteResult"), /buildReciteFeedbackHtml/);
+  assert.doesNotMatch(extractFunction(html, "handleBlindLineKey"), /penaltyMs/);
 });
 
-test("recite paints wrong chars instead of revealing the answer", () => {
-  assert.match(html, /function paintTypedChars/);
-  const render = extractFunction(html, "renderMode4");
-  assert.match(render, /recite-paint/);
-  assert.doesNotMatch(render, /오답 · 3초 추가/);
-  const enter = extractFunction(html, "handleBlindLineKey");
-  assert.match(enter, /if \(recitePlay\) \{[\s\S]*?state\.lineDiff = null/);
+test("flexible grader allows renamed idents and brace layout differences", () => {
+  const expected = [
+    "int add(int a, int b)",
+    "{",
+    "    return a + b;",
+    "}"
+  ].join("\n");
+  const renamed = [
+    "int add(int x, int y) {",
+    "    return x + y;",
+    "}"
+  ].join("\n");
+  const ok = logic.compareCodesFlexible(expected, renamed, "c");
+  assert.equal(ok.ok, true);
+  assert.equal(ok.wrongCount, 0);
+
+  const wrong = [
+    "int add(int x, int y) {",
+    "    return x - y;",
+    "}"
+  ].join("\n");
+  const bad = logic.compareCodesFlexible(expected, wrong, "c");
+  assert.equal(bad.ok, false);
+  assert.ok(bad.wrongCount >= 1);
 });
 
 test("give up exits without saveRecord", () => {
@@ -334,6 +361,7 @@ test("practice complete saves a record; give-up path does not", () => {
   const completeFn = extractFunction(html, "complete");
   assert.match(completeFn, /saveRecord/);
   assert.match(completeFn, /type: "practice"/);
-  assert.match(completeFn, /type: "game_recite"/);
+  assert.match(completeFn, /submitReciteGame/);
+  assert.match(extractFunction(html, "submitReciteGame"), /type: "game_recite"/);
   assert.equal(extractFunction(html, "giveUpGame").includes("saveRecord"), false);
 });

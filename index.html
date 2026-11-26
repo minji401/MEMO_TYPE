@@ -441,6 +441,98 @@
       color: transparent;
       caret-color: var(--caret);
     }
+    .recite-editor-wrap {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .recite-editor {
+      flex: 1;
+      width: 100%;
+      min-height: 280px;
+      resize: none;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 15px;
+      line-height: 1.7;
+      padding: 18px 20px;
+      white-space: pre;
+      caret-color: var(--caret);
+    }
+    .recite-editor-hint {
+      padding: 8px 20px 14px;
+      color: var(--sub);
+      font-size: 12px;
+    }
+    .recite-result-modal {
+      width: min(96vw, 1100px);
+      height: min(80vh, 900px);
+      max-width: none;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+    }
+    .recite-result-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 28px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--sub-alt);
+      background: var(--bg-soft);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      color: var(--sub);
+    }
+    .recite-result-summary b {
+      display: inline-block;
+      margin-left: 8px;
+      color: var(--caret);
+      font-size: 22px;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .recite-result-summary .bad-count b { color: var(--error); }
+    .recite-result-summary .ok-count b { color: #7dcf8a; }
+    .recite-result-body {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 16px 18px 20px;
+    }
+    .recite-feedback-code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13.5px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    .recite-feedback-line {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 10px;
+      padding: 1px 8px;
+      border-radius: 6px;
+    }
+    .recite-feedback-line .ln { color: var(--sub-alt); text-align: right; }
+    .recite-feedback-line.bad {
+      background: rgba(202, 71, 84, 0.14);
+      color: #ff8b96;
+    }
+    .recite-feedback-line .fb-note {
+      color: #ffb4bb;
+      opacity: 0.95;
+    }
+    .recite-result-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 14px 18px;
+      border-top: 1px solid var(--sub-alt);
+    }
     .m3-field::placeholder {
       color: var(--sub-alt);
       opacity: 1;
@@ -1013,6 +1105,7 @@
         <span class="game-title-hud" id="gameTitleHud"></span>
         <span>시간<b id="gameTimer">0</b>초</span>
         <span id="gameMissWrap" hidden>남은 오류<b id="gameLeft">0</b>/<b id="gameTotal">0</b> · 오답<b id="gameMiss">0</b>/3</span>
+        <button type="button" class="btn primary" id="reciteSubmitBtn" hidden>제출</button>
         <button type="button" class="btn" id="gameGiveUpBtn">포기</button>
       </div>
     </header>
@@ -1084,6 +1177,23 @@
         <span class="symbol-nav" role="button" data-dir="-1" aria-label="이전 기호">◀</span>
         <div class="symbol-keys" id="symbolKeys"></div>
         <span class="symbol-nav" role="button" data-dir="1" aria-label="다음 기호">▶</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="reciteResultOverlay">
+    <div class="modal recite-result-modal" role="dialog" aria-labelledby="reciteResultTitle">
+      <div class="modal-header">
+        <h2 id="reciteResultTitle">백지 결과</h2>
+        <button type="button" class="btn ghost" id="reciteResultClose">닫기</button>
+      </div>
+      <div class="recite-result-summary" id="reciteResultSummary"></div>
+      <div class="recite-result-body">
+        <div class="recite-feedback-code" id="reciteResultCode"></div>
+      </div>
+      <div class="recite-result-actions">
+        <button type="button" class="btn" id="reciteResultPractice">연습하기</button>
+        <button type="button" class="btn primary" id="reciteResultAgain">다시 하기</button>
       </div>
     </div>
   </div>
@@ -2809,26 +2919,16 @@
       }
 
       function complete() {
+        if (state.play && state.play.kind === "recite") {
+          submitReciteGame();
+          return;
+        }
         state.finished = true;
         updateStats();
         el.finWpm.textContent = String(wpmValue());
         el.finAcc.textContent = accuracyValue() + "%";
         el.finErr.textContent = String(state.keyWrong);
-        if (state.play && state.play.kind === "recite") {
-          saveRecord({
-            type: "game_recite",
-            result: "clear",
-            snippetId: state.play.snippetId,
-            title: state.play.title,
-            lang: state.lang,
-            durationSec: gameElapsedSec(),
-            errors: state.keyWrong,
-            wpm: wpmValue(),
-            acc: accuracyValue()
-          });
-          el.finish.querySelector("h2").textContent = "CLEAR";
-          el.finish.querySelector("p").textContent = "백지 연습 완료 · " + gameElapsedSec() + "초";
-        } else if (!state.play) {
+        if (!state.play) {
           const sn = findSnippet(state.snippetId);
           saveRecord({
             type: "practice",
@@ -2968,6 +3068,262 @@
         if (on) blurPracticeInput();
       }
 
+      function gradeKeywordSet(lang) {
+        const base = {
+          c: ["auto","break","case","char","const","continue","default","do","double","else","enum","extern","float","for","goto","if","inline","int","long","register","restrict","return","short","signed","sizeof","static","struct","switch","typedef","union","unsigned","void","volatile","while","NULL","true","false"],
+          cpp: ["auto","break","case","catch","class","const","constexpr","continue","default","delete","do","double","else","enum","explicit","export","extern","false","float","for","friend","goto","if","inline","int","long","namespace","new","noexcept","nullptr","operator","private","protected","public","return","short","signed","sizeof","static","struct","switch","template","this","throw","true","try","typedef","typename","union","unsigned","using","virtual","void","volatile","while"],
+          java: ["abstract","assert","boolean","break","byte","case","catch","char","class","const","continue","default","do","double","else","enum","extends","final","finally","float","for","if","implements","import","instanceof","int","interface","long","native","new","null","package","private","protected","public","return","short","static","strictfp","super","switch","synchronized","this","throw","throws","transient","true","false","try","void","volatile","while"],
+          python: ["False","None","True","and","as","assert","async","await","break","class","continue","def","del","elif","else","except","finally","for","from","global","if","import","in","is","lambda","nonlocal","not","or","pass","raise","return","try","while","with","yield"]
+        };
+        return new Set(base[lang] || base.c);
+      }
+
+      function tokenizeForGrade(source) {
+        const tokens = [];
+        const s = String(source || "").replace(/\r\n/g, "\n").replace(/\t/g, "    ");
+        const openBrace = String.fromCharCode(123);
+        const closeBrace = String.fromCharCode(125);
+        let i = 0;
+        let line = 1;
+        while (i < s.length) {
+          const ch = s[i];
+          if (ch === "\n") {
+            line += 1;
+            i += 1;
+            continue;
+          }
+          if (ch === " " || ch === "\t") {
+            i += 1;
+            continue;
+          }
+          if (ch === '"' || ch === "'") {
+            const quote = ch;
+            let j = i + 1;
+            let text = ch;
+            while (j < s.length) {
+              text += s[j];
+              if (s[j] === "\\" && j + 1 < s.length) {
+                text += s[j + 1];
+                j += 2;
+                continue;
+              }
+              if (s[j] === quote) {
+                j += 1;
+                break;
+              }
+              j += 1;
+            }
+            tokens.push({ type: "str", value: text, line: line });
+            i = j;
+            continue;
+          }
+          if (ch === "#") {
+            let j = i;
+            let text = "";
+            while (j < s.length && s[j] !== "\n") {
+              text += s[j];
+              j += 1;
+            }
+            tokens.push({ type: "pp", value: text.replace(/\s+/g, " ").trim(), line: line });
+            i = j;
+            continue;
+          }
+          if (/[_A-Za-z]/.test(ch)) {
+            let j = i + 1;
+            while (j < s.length && /[_A-Za-z0-9]/.test(s[j])) j += 1;
+            tokens.push({ type: "id", value: s.slice(i, j), line: line });
+            i = j;
+            continue;
+          }
+          if (/[0-9]/.test(ch)) {
+            let j = i + 1;
+            while (j < s.length && /[0-9.]/.test(s[j])) j += 1;
+            tokens.push({ type: "num", value: s.slice(i, j), line: line });
+            i = j;
+            continue;
+          }
+          const two = s.slice(i, i + 2);
+          const three = s.slice(i, i + 3);
+          if (three === "..." || three === "<<=" || three === ">>=") {
+            tokens.push({ type: "op", value: three, line: line });
+            i += 3;
+            continue;
+          }
+          if (two === "->" || two === "<<" || two === ">>" || two === "&&" || two === "||" ||
+              two === "==" || two === "!=" || two === "<=" || two === ">=" || two === "++" || two === "--" ||
+              two === "+=" || two === "-=" || two === "*=" || two === "/=" || two === "%=") {
+            tokens.push({ type: "op", value: two, line: line });
+            i += 2;
+            continue;
+          }
+          if (ch === openBrace || ch === closeBrace || ch === "(" || ch === ")" || ch === "[" || ch === "]" ||
+              ch === ";" || ch === "," || ch === "." || ch === ":" || ch === "?" || ch === "~" ||
+              ch === "!" || ch === "%" || ch === "^" || ch === "&" || ch === "*" || ch === "+" ||
+              ch === "-" || ch === "=" || ch === "|" || ch === "/" || ch === "<" || ch === ">") {
+            tokens.push({ type: "op", value: ch, line: line });
+            i += 1;
+            continue;
+          }
+          tokens.push({ type: "op", value: ch, line: line });
+          i += 1;
+        }
+        return tokens;
+      }
+
+      function compareCodesFlexible(expectedSrc, typedSrc, lang) {
+        const kw = gradeKeywordSet(lang);
+        const exp = tokenizeForGrade(expectedSrc);
+        const got = tokenizeForGrade(typedSrc);
+        const map = {};
+        const rev = {};
+        const issues = [];
+        let i = 0;
+        let j = 0;
+
+        function addIssue(line, message) {
+          issues.push({ line: Math.max(1, line || 1), message: message });
+        }
+
+        function isFixedId(name) {
+          return kw.has(name);
+        }
+
+        while (i < exp.length && j < got.length) {
+          const te = exp[i];
+          const tg = got[j];
+          if (te.type === "id" && tg.type === "id") {
+            if (isFixedId(te.value) || isFixedId(tg.value)) {
+              if (te.value !== tg.value) {
+                addIssue(tg.line, "'" + tg.value + "' 대신 '" + te.value + "' 가 필요합니다");
+              }
+            } else if (map[tg.value]) {
+              if (map[tg.value] !== te.value) {
+                addIssue(tg.line, "이름 '" + tg.value + "' 사용이 일관되지 않습니다 (여기선 '" + te.value + "' 자리)");
+              }
+            } else if (rev[te.value] && rev[te.value] !== tg.value) {
+              addIssue(tg.line, "'" + te.value + "' 자리에 '" + rev[te.value] + "' 대신 '" + tg.value + "' 가 왔습니다");
+            } else {
+              map[tg.value] = te.value;
+              rev[te.value] = tg.value;
+            }
+            i += 1;
+            j += 1;
+            continue;
+          }
+          if (te.type === tg.type && te.value === tg.value) {
+            i += 1;
+            j += 1;
+            continue;
+          }
+          addIssue(tg.line, "'" + tg.value + "' 대신 '" + te.value + "' 가 필요합니다");
+          i += 1;
+          j += 1;
+        }
+        while (j < got.length) {
+          addIssue(got[j].line, "추가된 토큰 '" + got[j].value + "'");
+          j += 1;
+        }
+        while (i < exp.length) {
+          const lastLine = got.length ? got[got.length - 1].line : 1;
+          addIssue(lastLine, "빠진 토큰 '" + exp[i].value + "'");
+          i += 1;
+        }
+
+        const byLine = {};
+        issues.forEach(function (issue) {
+          if (!byLine[issue.line]) byLine[issue.line] = [];
+          if (byLine[issue.line].indexOf(issue.message) === -1) byLine[issue.line].push(issue.message);
+        });
+        const wrongLines = Object.keys(byLine).map(Number).sort(function (a, b) { return a - b; });
+        return {
+          ok: wrongLines.length === 0,
+          wrongCount: wrongLines.length,
+          wrongLines: wrongLines,
+          byLine: byLine,
+          issues: issues
+        };
+      }
+
+      function buildReciteFeedbackHtml(typedSrc, grade) {
+        const lines = String(typedSrc || "").replace(/\r\n/g, "\n").split("\n");
+        if (!lines.length) lines.push("");
+        let html = "";
+        lines.forEach(function (line, idx) {
+          const n = idx + 1;
+          const notes = grade.byLine[n] || [];
+          const bad = notes.length > 0;
+          html += '<div class="recite-feedback-line' + (bad ? " bad" : "") + '">';
+          html += '<span class="ln">' + n + "</span>";
+          html += "<span>" + (line ? esc(line) : "&nbsp;");
+          if (bad) {
+            html += '<span class="fb-note">  // ' + esc(notes.join(" · ")) + "</span>";
+          }
+          html += "</span></div>";
+        });
+        return html;
+      }
+
+      function renderReciteEditor() {
+        el.board.innerHTML =
+          '<div class="recite-editor-wrap">' +
+          '<textarea id="reciteEditor" class="recite-editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="기억한 코드를 여기에 작성한 뒤 제출하세요."></textarea>' +
+          '<div class="recite-editor-hint">작성 중에는 채점하지 않습니다. 변수 이름은 달라도 되고, 중괄호 위치·띄어쓰기도 유연하게 봅니다. 다 쓰면 제출을 누르세요.</div>' +
+          "</div>";
+        const editor = document.getElementById("reciteEditor");
+        if (editor) {
+          editor.value = state.play && state.play.typedText ? state.play.typedText : "";
+          editor.addEventListener("input", function () {
+            if (!state.play || state.play.kind !== "recite") return;
+            state.play.typedText = editor.value;
+            if (!state.play.startedAt) state.play.startedAt = Date.now();
+            updateGameHud();
+          });
+          setTimeout(function () {
+            if (!state.inputLocked) editor.focus();
+          }, 20);
+        }
+        updateCatcherLayer();
+      }
+
+      function showReciteResult(grade, typedText, durationSec) {
+        const summary = document.getElementById("reciteResultSummary");
+        const codeBox = document.getElementById("reciteResultCode");
+        const title = document.getElementById("reciteResultTitle");
+        if (title) title.textContent = grade.ok ? "CLEAR" : "결과";
+        if (summary) {
+          summary.innerHTML =
+            '<span class="' + (grade.ok ? "ok-count" : "bad-count") + '">틀린 줄<b>' + grade.wrongCount + "</b></span>" +
+            "<span>시간<b>" + durationSec + "</b>초</span>" +
+            "<span>결과<b>" + (grade.ok ? "CLEAR" : "RETRY") + "</b></span>";
+        }
+        if (codeBox) codeBox.innerHTML = buildReciteFeedbackHtml(typedText, grade);
+        openOverlay("reciteResultOverlay");
+      }
+
+      function submitReciteGame() {
+        if (!state.play || state.play.kind !== "recite" || state.finished || state.inputLocked) return;
+        const editor = document.getElementById("reciteEditor");
+        const typedText = editor ? editor.value : (state.play.typedText || "");
+        state.play.typedText = typedText;
+        const expected = preprocess(state.raw, state.lang);
+        const grade = compareCodesFlexible(expected, typedText, state.lang);
+        const durationSec = gameElapsedSec();
+        state.finished = true;
+        saveRecord({
+          type: "game_recite",
+          result: grade.ok ? "clear" : "out",
+          snippetId: state.play.snippetId,
+          title: state.play.title,
+          lang: state.lang,
+          durationSec: durationSec,
+          errors: grade.wrongCount,
+          wpm: 0,
+          acc: grade.ok ? 100 : Math.max(0, 100 - grade.wrongCount * 5)
+        });
+        showReciteResult(grade, typedText, durationSec);
+        updateCatcherLayer();
+      }
+
       function exitGame(opts) {
         clearCountdown();
         state.play = null;
@@ -2976,6 +3332,9 @@
         document.body.classList.remove("spot-game");
         const hud = document.getElementById("gameHud");
         if (hud) hud.style.display = "";
+        const submitBtn = document.getElementById("reciteSubmitBtn");
+        if (submitBtn) submitBtn.hidden = true;
+        closeOverlay("reciteResultOverlay");
         el.finish.classList.remove("show");
         el.finish.querySelector("h2").textContent = "COMPLETE";
         el.finish.querySelector("p").textContent = "이 코드를 손끝으로 완벽히 외웠습니다.";
@@ -3092,13 +3451,25 @@
         document.getElementById("gameTimer").textContent = "0";
         document.getElementById("gameMissWrap").hidden = kind !== "spot";
         document.getElementById("gameMiss").textContent = "0";
+        const reciteSubmitBtn = document.getElementById("reciteSubmitBtn");
+        if (reciteSubmitBtn) reciteSubmitBtn.hidden = kind !== "recite";
         if (kind === "recite") {
           state.mode = 4;
-          resetPractice(false);
+          state.raw = snippet.code;
+          state.source = preprocess(snippet.code, lang);
+          state.lines = state.source.split("\n");
+          state.finished = false;
+          state.play.typedText = "";
+          el.finish.classList.remove("show");
+          closeOverlay("reciteResultOverlay");
+          renderReciteEditor();
+          updateGameHud();
           setInputLocked(true);
           startCountdown(state.play.title, function () {
             state.play.startedAt = Date.now();
-            focusPracticeInput();
+            updateGameHud();
+            const editor = document.getElementById("reciteEditor");
+            if (editor) editor.focus();
           });
         } else {
           const src = preprocess(snippet.code, lang);
@@ -3536,12 +3907,15 @@
           return '<div class="record-list">' + list.slice(0, 30).map(function (r) {
             let meta = "";
             if (kind === "practice") meta = "WPM " + (r.wpm || 0) + " · " + (r.acc || 0) + "%";
-            else if (r.type === "game_recite") meta = (r.durationSec || 0) + "초 · 오타 " + (r.errors || 0);
             else {
               const tag = r.result === "out"
                 ? '<span class="result-out">OUT</span>'
                 : '<span class="result-clear">CLEAR</span>';
-              meta = tag + " · " + (r.durationSec || 0) + "초";
+              if (r.type === "game_recite") {
+                meta = tag + " · " + (r.durationSec || 0) + "초 · 틀린 줄 " + (r.errors || 0);
+              } else {
+                meta = tag + " · " + (r.durationSec || 0) + "초";
+              }
             }
             return '<div class="record-row"><div><b>' + esc(r.title || "코드") + '</b><span> · ' +
               formatWhen(r.at) + "</span></div><span>" + meta + "</span></div>";
@@ -3579,6 +3953,10 @@
         updateCatcherLayer();
         if (state.play && state.play.kind === "spot") {
           renderSpotBoard();
+          return;
+        }
+        if (state.play && state.play.kind === "recite") {
+          renderReciteEditor();
           return;
         }
         if (state.mode === 1 || state.mode === 2) renderTypingMode(state.mode === 2);
@@ -3850,24 +4228,15 @@
           if (i < state.lineIndex) {
             html += esc(line);
           } else if (i === state.lineIndex) {
-            const isRecite = !!(state.play && state.play.kind === "recite");
-            const expectedBody = line.slice(indent.length);
             html += '<span class="m3-input-wrap">';
             html += '<span class="m3-indent">' + esc(indent) + "</span>";
-            if (isRecite) {
-              html += '<span class="recite-line">';
-              html += '<span class="recite-paint" id="recitePaint">' + paintTypedChars(state.lineText, expectedBody) + "</span>";
-              html += '<input class="m3-field recite-ghost" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
-              html += "</span>";
-            } else {
-              html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
-            }
+            html += '<input class="m3-field" id="m3field" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" inputmode="text" />';
             html += "</span>";
           } else {
             html += "&nbsp;";
           }
           html += "</span></div>";
-          if (i === state.lineIndex && state.lineError && state.lineDiff && !(state.play && state.play.kind === "recite")) {
+          if (i === state.lineIndex && state.lineError && state.lineDiff) {
             html += '<div class="diff-row">입력: ' + state.lineDiff.typed +
               '  <span class="exp">정답: ' + state.lineDiff.expected + '</span>' +
               '<span class="pass-guide">Enter 한 번 더: 맞음 처리하고 넘어가기 | Tab: 이 줄 스킵</span></div>';
@@ -3888,10 +4257,6 @@
           field.addEventListener("input", function () {
             state.lineText = field.value.replace(/\t/g, "    ");
             playClick(false);
-            if (state.play && state.play.kind === "recite") {
-              const paint = document.getElementById("recitePaint");
-              if (paint) paint.innerHTML = paintTypedChars(state.lineText, hint);
-            }
             if (state.lineError) {
               state.lineError = false;
               state.lineDiff = null;
@@ -4063,10 +4428,10 @@
         if (e.key !== "Enter") return;
         e.preventDefault();
         if (state.finished || state.inputLocked) return;
+        if (state.play && state.play.kind === "recite") return;
         startClock();
 
-        const recitePlay = !!(state.play && state.play.kind === "recite");
-        if (state.lineError && !recitePlay) {
+        if (state.lineError) {
           clearLineHint();
           state.lineError = false;
           state.lineDiff = null;
@@ -4107,13 +4472,6 @@
           state.keyWrong += 1;
           state.lineError = true;
           playClick(true);
-          if (recitePlay) {
-            state.play.penaltyMs = (state.play.penaltyMs || 0) + 3000;
-            updateGameHud();
-            state.lineDiff = null;
-            render();
-            return;
-          }
           state.lineDiff = {
             typed: esc(assembled || "(빈 줄)"),
             expected: esc(orig || "(빈 줄)")
@@ -4140,11 +4498,12 @@
       function updateCatcherLayer() {
         if (!el.kbCatcher) return;
         const off = state.finished || state.mode === 4 || state.inputLocked ||
-          (state.play && state.play.kind === "spot") ||
+          (state.play && (state.play.kind === "spot" || state.play.kind === "recite")) ||
           document.body.classList.contains("view-mypage") ||
           el.overlay.classList.contains("show") ||
           document.getElementById("gamePickOverlay").classList.contains("show") ||
-          document.getElementById("gameRangeOverlay").classList.contains("show");
+          document.getElementById("gameRangeOverlay").classList.contains("show") ||
+          document.getElementById("reciteResultOverlay").classList.contains("show");
         el.kbCatcher.style.pointerEvents = off ? "none" : "auto";
       }
 
@@ -4161,8 +4520,9 @@
       }
 
       function focusPracticeInput() {
-        if (state.inputLocked || (state.play && state.play.kind === "spot")) return;
+        if (state.inputLocked || (state.play && (state.play.kind === "spot" || state.play.kind === "recite"))) return;
         if (state.finished || el.overlay.classList.contains("show") || document.body.classList.contains("view-mypage")) return;
+        if (document.getElementById("reciteResultOverlay").classList.contains("show")) return;
         updateCatcherLayer();
         if (state.mode === 4) {
           const field = document.getElementById("m3field");
@@ -4241,6 +4601,10 @@
             closeOverlay("gameRangeOverlay");
             return;
           }
+          if (document.getElementById("reciteResultOverlay").classList.contains("show")) {
+            closeOverlay("reciteResultOverlay");
+            return;
+          }
           if (document.body.classList.contains("view-mypage")) {
             closeMyPage();
             return;
@@ -4251,7 +4615,9 @@
           return;
         }
 
+        if (document.activeElement && document.activeElement.id === "reciteEditor") return;
         if (document.body.classList.contains("view-mypage")) return;
+        if (document.getElementById("reciteResultOverlay").classList.contains("show")) return;
         if (el.overlay.classList.contains("show")) return;
 
         if (e.key === "F2") {
@@ -4468,6 +4834,29 @@
         beginGamePlay(pendingGameKind, pick, list);
       });
       document.getElementById("gameGiveUpBtn").addEventListener("click", giveUpGame);
+      document.getElementById("reciteSubmitBtn").addEventListener("click", submitReciteGame);
+      document.getElementById("reciteResultClose").addEventListener("click", function () {
+        closeOverlay("reciteResultOverlay");
+      });
+      document.getElementById("reciteResultOverlay").addEventListener("click", function (e) {
+        if (e.target.id === "reciteResultOverlay") closeOverlay("reciteResultOverlay");
+      });
+      document.getElementById("reciteResultPractice").addEventListener("click", function () {
+        closeOverlay("reciteResultOverlay");
+        exitGame();
+      });
+      document.getElementById("reciteResultAgain").addEventListener("click", function () {
+        if (!state.play || !state.play.pool || !state.play.pool.length) {
+          closeOverlay("reciteResultOverlay");
+          exitGame();
+          return;
+        }
+        const kind = state.play.kind;
+        const pool = state.play.pool;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        closeOverlay("reciteResultOverlay");
+        beginGamePlay(kind, pick, pool);
+      });
       el.board.addEventListener("click", function (e) {
         if (!state.play || state.play.kind !== "spot") return;
         const row = e.target.closest(".spot-line");
