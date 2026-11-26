@@ -441,6 +441,10 @@
       color: transparent;
       caret-color: var(--caret);
     }
+    body.recite-game .code-scroll {
+      padding: 0;
+      overflow: hidden;
+    }
     .recite-editor-wrap {
       height: 100%;
       display: flex;
@@ -450,7 +454,8 @@
     .recite-editor {
       flex: 1;
       width: 100%;
-      min-height: 280px;
+      min-height: 0;
+      height: 100%;
       resize: none;
       border: 0;
       outline: none;
@@ -459,8 +464,9 @@
       font-family: "JetBrains Mono", monospace;
       font-size: 15px;
       line-height: 1.7;
-      padding: 18px 20px;
+      padding: 18px 20px 24px;
       white-space: pre;
+      overflow: auto;
       caret-color: var(--caret);
     }
     .recite-editor-hint {
@@ -3942,15 +3948,61 @@
         return html;
       }
 
+      function insertReciteText(editor, text) {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const value = editor.value;
+        editor.value = value.slice(0, start) + text + value.slice(end);
+        const pos = start + text.length;
+        editor.selectionStart = editor.selectionEnd = pos;
+        if (state.play && state.play.kind === "recite") {
+          state.play.typedText = editor.value;
+          if (!state.play.startedAt) state.play.startedAt = Date.now();
+          updateGameHud();
+        }
+      }
+
+      function handleReciteEditorKeydown(e) {
+        const editor = e.target;
+        if (!editor || editor.id !== "reciteEditor") return;
+        if (state.inputLocked || state.finished) {
+          if (e.key === "Enter" || e.key === "Tab" || e.key === "Backspace" || (e.key && e.key.length === 1)) {
+            e.preventDefault();
+          }
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          insertReciteText(editor, "    ");
+          return;
+        }
+        if (e.key !== "Enter" || e.shiftKey) return;
+        e.preventDefault();
+        const value = editor.value;
+        const start = editor.selectionStart;
+        const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        const before = value.slice(lineStart, start);
+        const lead = before.match(/^[ \t]*/);
+        let indent = lead ? lead[0] : "";
+        const trimmed = before.replace(/\s+$/, "");
+        if (/\{$/.test(trimmed) || /:$/.test(trimmed)) {
+          indent += indent.indexOf("\t") >= 0 ? "\t" : "    ";
+        }
+        insertReciteText(editor, "\n" + indent);
+      }
+
       function renderReciteEditor() {
+        el.board.style.paddingBottom = "";
+        el.board.scrollTop = 0;
         el.board.innerHTML =
           '<div class="recite-editor-wrap">' +
           '<textarea id="reciteEditor" class="recite-editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="기억한 코드를 여기에 작성한 뒤 제출하세요."></textarea>' +
-          '<div class="recite-editor-hint">작성 중에는 채점하지 않습니다. 변수 이름은 달라도 되고, 중괄호 위치·띄어쓰기도 유연하게 봅니다. 다 쓰면 제출을 누르세요.</div>' +
+          '<div class="recite-editor-hint">Enter 시 자동 들여쓰기 · Tab으로 들여쓰기 · 작성 후 제출하세요. 변수 이름·중괄호 위치·띄어쓰기는 유연하게 채점합니다.</div>' +
           "</div>";
         const editor = document.getElementById("reciteEditor");
         if (editor) {
           editor.value = state.play && state.play.typedText ? state.play.typedText : "";
+          editor.addEventListener("keydown", handleReciteEditorKeydown);
           editor.addEventListener("input", function () {
             if (!state.play || state.play.kind !== "recite") return;
             state.play.typedText = editor.value;
@@ -4009,6 +4061,8 @@
         setInputLocked(false);
         document.body.classList.remove("game-play");
         document.body.classList.remove("spot-game");
+        document.body.classList.remove("recite-game");
+        el.board.style.paddingBottom = "";
         const hud = document.getElementById("gameHud");
         if (hud) hud.style.display = "";
         const submitBtn = document.getElementById("reciteSubmitBtn");
@@ -4126,6 +4180,7 @@
         };
         document.body.classList.add("game-play");
         document.body.classList.toggle("spot-game", kind === "spot");
+        document.body.classList.toggle("recite-game", kind === "recite");
         document.getElementById("gameTitleHud").textContent = state.play.title;
         document.getElementById("gameTimer").textContent = "0";
         document.getElementById("gameMissWrap").hidden = kind !== "spot";
@@ -4155,7 +4210,7 @@
           const mutated = mutateForSpot(src, lang);
           if (!Object.keys(mutated.errors).length) {
             state.play = null;
-            document.body.classList.remove("game-play", "spot-game");
+            document.body.classList.remove("game-play", "spot-game", "recite-game");
             window.alert("이 코드는 찾을 오류를 만들 줄이 부족합니다. 다른 코드를 선택해 주세요.");
             return;
           }
@@ -5893,7 +5948,7 @@
       });
 
       function holdPracticeFocus(e) {
-        if (state.play && state.play.kind === "spot") return;
+        if (state.play && (state.play.kind === "spot" || state.play.kind === "recite")) return;
         if (state.inputLocked || state.finished || el.overlay.classList.contains("show")) return;
         if (e.target && e.target.closest && e.target.closest(".finish")) return;
         if (e.cancelable) e.preventDefault();

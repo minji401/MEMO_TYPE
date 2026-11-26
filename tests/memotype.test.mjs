@@ -196,8 +196,13 @@ test("recite game uses free editor submit and large result modal", () => {
   assert.match(html, /id="reciteResultOverlay"/);
   assert.match(html, /recite-result-modal/);
   assert.match(html, /80vh/);
+  assert.match(html, /body\.recite-game\s+\.code-scroll/);
   assert.match(extractFunction(html, "submitReciteGame"), /compareCodesFlexible/);
   assert.match(extractFunction(html, "showReciteResult"), /buildReciteFeedbackHtml/);
+  assert.match(extractFunction(html, "handleReciteEditorKeydown"), /Enter/);
+  assert.match(extractFunction(html, "handleReciteEditorKeydown"), /insertReciteText/);
+  assert.match(extractFunction(html, "renderReciteEditor"), /paddingBottom/);
+  assert.match(extractFunction(html, "holdPracticeFocus"), /recite/);
   assert.doesNotMatch(extractFunction(html, "handleBlindLineKey"), /penaltyMs/);
 });
 
