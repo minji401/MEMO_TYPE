@@ -67,11 +67,12 @@ function loadLogic() {
     extractFunction(html, "mutateForSpot"),
     extractFunction(html, "gradeKeywordSet"),
     extractFunction(html, "tokenizeForGrade"),
+    extractFunction(html, "stripOptionalControlBraces"),
     extractFunction(html, "compareCodesFlexible")
   ].join("\n");
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, mutateTypeLine, mutateAddSemi, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, compareCodesFlexible };"
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, mutateTypeLine, mutateAddSemi, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
   );
   return factory(KEYWORDS);
 }
@@ -141,11 +142,15 @@ test("practice speed keeps 40 and code trends use daily line charts", () => {
 
 test("cloud sync keeps my codes and meta stats across devices", () => {
   assert.match(extractFunction(html, "applyCloudList"), /mergeSnippetLists/);
-  assert.match(extractFunction(html, "applyCloudList"), /uploadLocalOnlySnippets/);
+  assert.match(extractFunction(html, "applyCloudList"), /markSnippetDeleted|isSnippetMarkedDeleted/);
+  assert.doesNotMatch(html, /function uploadLocalOnlySnippets/);
+  assert.match(extractFunction(html, "deleteCurrentSnippet"), /markSnippetDeleted/);
+  assert.match(extractFunction(html, "deleteCurrentSnippet"), /persistSnippets/);
   assert.match(extractFunction(html, "subscribeCloudSnippets"), /unsubscribeCloudSnippets/);
   assert.match(extractFunction(html, "onUserSignedIn"), /subscribeCloudMeta/);
   assert.match(extractFunction(html, "persistKeyStats"), /writeKeyStatsCloud|keyStatsCloudTimer/);
   assert.match(extractFunction(html, "keyStatEntries"), /localeCompare/);
+  assert.match(extractFunction(html, "renderTrendLineChart"), /origin:\s*true/);
   assert.match(html, /mypage-chart-wrap\.fill[\s\S]*flex:\s*1\s+1\s+0\s*!important/);
 });
 
@@ -201,6 +206,7 @@ test("recite game uses free editor submit and large result modal", () => {
   assert.match(extractFunction(html, "showReciteResult"), /buildReciteFeedbackHtml/);
   assert.match(extractFunction(html, "handleReciteEditorKeydown"), /Enter/);
   assert.match(extractFunction(html, "handleReciteEditorKeydown"), /insertReciteText/);
+  assert.match(extractFunction(html, "handleReciteEditorKeydown"), /reciteOutdent|reciteShouldIncreaseIndent/);
   assert.match(extractFunction(html, "renderReciteEditor"), /paddingBottom/);
   assert.match(extractFunction(html, "holdPracticeFocus"), /recite/);
   assert.doesNotMatch(extractFunction(html, "handleBlindLineKey"), /penaltyMs/);
@@ -230,6 +236,12 @@ test("flexible grader allows renamed idents and brace layout differences", () =>
   const bad = logic.compareCodesFlexible(expected, wrong, "c");
   assert.equal(bad.ok, false);
   assert.ok(bad.wrongCount >= 1);
+
+  const withBrace = "if (x) { break; }";
+  const noBrace = "if (x) break;";
+  const braceOk = logic.compareCodesFlexible(withBrace, noBrace, "c");
+  assert.equal(braceOk.ok, true);
+  assert.equal(braceOk.wrongCount, 0);
 });
 
 test("give up exits without saveRecord", () => {

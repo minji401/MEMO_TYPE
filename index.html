@@ -1558,6 +1558,7 @@
       const RECORDS_KEY = "memotype_records_v1";
       const KEY_STATS_KEY = "memotype_keystats_v1";
       const CODE_TRENDS_KEY = "memotype_code_trends_v1";
+      const DELETED_SNIPPETS_KEY = "memotype_deleted_snippets_v1";
       const PRACTICE_KEEP = 40;
 
       const KEYWORDS = {
@@ -2335,10 +2336,34 @@
       }
 
       function persistSnippets() {
-        if (state.user) return;
         try {
-          localStorage.setItem(SNIPPETS_KEY, JSON.stringify(state.snippets));
+          const mine = (state.snippets || []).filter(function (item) {
+            return item && !isBuiltInSnippet(item);
+          });
+          localStorage.setItem(SNIPPETS_KEY, JSON.stringify(mine));
         } catch (e) {}
+      }
+
+      function readDeletedSnippetIds() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(DELETED_SNIPPETS_KEY) || "[]");
+          return Array.isArray(parsed) ? parsed.filter(function (id) { return typeof id === "string"; }) : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function markSnippetDeleted(id) {
+        if (!id) return;
+        const ids = readDeletedSnippetIds();
+        if (ids.indexOf(id) === -1) ids.push(id);
+        try {
+          localStorage.setItem(DELETED_SNIPPETS_KEY, JSON.stringify(ids.slice(-300)));
+        } catch (e) {}
+      }
+
+      function isSnippetMarkedDeleted(id) {
+        return readDeletedSnippetIds().indexOf(id) !== -1;
       }
 
       function readLocalSnippets() {
@@ -2416,35 +2441,27 @@
         });
       }
 
-      function uploadLocalOnlySnippets(cloudList) {
-        if (!isLoggedIn()) return;
-        const cloudIds = {};
-        (cloudList || []).forEach(function (item) {
-          if (item && item.id) cloudIds[item.id] = true;
-        });
-        readLocalSnippets().forEach(function (item) {
-          if (!item || !item.id || isBuiltInSnippet(item) || cloudIds[item.id]) return;
-          if (!String(item.code || "").trim()) return;
-          setDoc(snippetDoc(state.user.uid, item.id), {
-            id: item.id,
-            title: item.title || "제목 없음",
-            code: item.code,
-            lang: snippetLang(item),
-            updatedAt: item.updatedAt || new Date().toISOString()
-          }, { merge: true }).catch(function () {});
-        });
-      }
-
       function applyCloudList(list) {
         const prevId = state.snippetId;
         const modalOpen = el.overlay.classList.contains("show");
-        const cloud = (list || []).filter(function (item) {
+        const rawCloud = (list || []).filter(function (item) {
           return item && item.id && !isBuiltInSnippet(item);
         });
-        // Keep local-only codes visible until they are uploaded, so the first-login
-        // dropdown does not briefly (or permanently) lose "내 코드".
-        state.snippets = mergeSnippetLists(cloud, readLocalSnippets());
-        uploadLocalOnlySnippets(cloud);
+        // Re-delete anything the user already removed, so local caches cannot resurrect it.
+        rawCloud.forEach(function (item) {
+          if (!isSnippetMarkedDeleted(item.id) || !isLoggedIn()) return;
+          deleteDoc(snippetDoc(state.user.uid, item.id)).catch(function () {});
+        });
+        const cloud = rawCloud.filter(function (item) {
+          return !isSnippetMarkedDeleted(item.id);
+        });
+        const localKeep = readLocalSnippets().filter(function (item) {
+          return item && item.id && !isSnippetMarkedDeleted(item.id);
+        });
+        // Cloud wins for shared ids; local-only codes stay visible until the user
+        // migrates them, but we never auto-reupload deleted ids.
+        state.snippets = mergeSnippetLists(cloud, localKeep);
+        persistSnippets();
         renderSnippetSelects();
         const cur = findSnippet(prevId);
         if (cur) {
@@ -2462,14 +2479,15 @@
       }
 
       async function migrateLocalIfNeeded(uid) {
-        const local = readLocalSnippets();
-        if (!local.length || !hasCustomLocalSnippets(local)) return;
+        const local = readLocalSnippets().filter(function (item) {
+          return item && item.id && !isSnippetMarkedDeleted(item.id) && !isBuiltInSnippet(item) && String(item.code || "").trim();
+        });
+        if (!local.length) return;
         const ok = window.confirm("기존 로컬에 저장된 코드를 클라우드 계정에 동기화하시겠습니까?");
         if (!ok) return;
         try {
           const batch = writeBatch(firebaseDb);
           local.forEach(function (item) {
-            if (!item.id || !String(item.code || "").trim() || isBuiltInSnippet(item)) return;
             batch.set(snippetDoc(uid, item.id), {
               id: item.id,
               title: item.title || "제목 없음",
@@ -2832,12 +2850,11 @@
         }
         state.creatingSnippet = false;
         state.raw = code;
+        persistSnippets();
         if (isLoggedIn()) {
           saveSnippetToCloud(snippet).catch(function () {
             window.alert("클라우드 저장에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.");
           });
-        } else {
-          persistSnippets();
         }
         renderSnippetSelects();
         closeModal();
@@ -2860,15 +2877,15 @@
         const ok = window.confirm("\"" + (cur.title || "제목 없음") + "\" 코드를 삭제할까요?");
         if (!ok) return;
         const removedId = cur.id;
+        markSnippetDeleted(removedId);
         state.snippets = state.snippets.filter(function (item) {
           return item.id !== removedId;
         });
+        persistSnippets();
         if (isLoggedIn()) {
           deleteDoc(snippetDoc(state.user.uid, removedId)).catch(function () {
             window.alert("클라우드에서 코드를 삭제하지 못했습니다. 네트워크 상태를 확인해 주세요.");
           });
-        } else {
-          persistSnippets();
         }
         const next = visibleSnippets(state.lang)[0] || null;
         state.snippetId = next ? next.id : "";
@@ -3670,14 +3687,30 @@
         if (rec.type === "practice") recordPracticeTrend(rec);
         state.records.unshift(rec);
         state.records = mergeRecordLists(state.records, []);
-        prunePracticeRecords();
+        const cloudRec = {
+          id: rec.id,
+          at: rec.at,
+          type: rec.type || "",
+          result: rec.result || "",
+          snippetId: rec.snippetId || "",
+          title: rec.title || "",
+          lang: rec.lang || "",
+          mode: rec.mode || 0,
+          wpm: Number(rec.wpm || 0),
+          acc: Number(rec.acc || 0),
+          errors: Number(rec.errors || 0),
+          durationSec: Number(rec.durationSec || 0)
+        };
         if (isLoggedIn()) {
-          setDoc(doc(firebaseDb, "users", state.user.uid, "records", rec.id), rec, { merge: true }).catch(function () {});
+          setDoc(doc(firebaseDb, "users", state.user.uid, "records", rec.id), cloudRec, { merge: true }).catch(function () {
+            window.alert("기록을 클라우드에 저장하지 못했습니다. 네트워크 상태를 확인해 주세요.");
+          });
         }
+        prunePracticeRecords();
       }
 
       function subscribeCloudRecords(uid) {
-        if (typeof state.unsubRecords === "function") state.unsubRecords();
+        unsubscribeCloudRecords();
         state.unsubRecords = onSnapshot(collection(firebaseDb, "users", uid, "records"), function (snap) {
           const list = [];
           snap.forEach(function (d) {
@@ -3685,6 +3718,7 @@
             if (!data.id) data.id = d.id;
             list.push(data);
           });
+          // Prefer cloud as source of truth, then fold in any newer local-only rows.
           state.records = mergeRecordLists(list, readLocalRecords());
           bootstrapCodeTrendsFromRecords();
           prunePracticeRecords();
@@ -3692,6 +3726,7 @@
         }, function () {
           state.records = mergeRecordLists(state.records, readLocalRecords());
           prunePracticeRecords();
+          window.alert("클라우드 기록을 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.");
         });
       }
 
@@ -3855,10 +3890,66 @@
         return tokens;
       }
 
+      function stripOptionalControlBraces(tokens) {
+        const openB = String.fromCharCode(123);
+        const closeB = String.fromCharCode(125);
+        const out = [];
+        let i = 0;
+        while (i < tokens.length) {
+          const t = tokens[i];
+          const isElse = t.type === "id" && t.value === "else";
+          const isCloseParen = t.type === "op" && t.value === ")";
+          let strip = false;
+          if (isElse && i + 1 < tokens.length && tokens[i + 1].type === "op" && tokens[i + 1].value === openB) {
+            strip = true;
+          } else if (isCloseParen && i + 1 < tokens.length && tokens[i + 1].type === "op" && tokens[i + 1].value === openB) {
+            let depth = 0;
+            for (let k = i; k >= 0; k -= 1) {
+              if (tokens[k].type === "op" && tokens[k].value === ")") depth += 1;
+              else if (tokens[k].type === "op" && tokens[k].value === "(") {
+                depth -= 1;
+                if (depth === 0) {
+                  const prev = k > 0 ? tokens[k - 1] : null;
+                  if (prev && prev.type === "id" &&
+                      (prev.value === "if" || prev.value === "for" || prev.value === "while")) {
+                    strip = true;
+                  }
+                  break;
+                }
+              }
+            }
+          }
+          out.push(t);
+          if (!strip) {
+            i += 1;
+            continue;
+          }
+          let d = 0;
+          let j = i + 1;
+          let nested = false;
+          for (; j < tokens.length; j += 1) {
+            if (tokens[j].type === "op" && tokens[j].value === openB) {
+              d += 1;
+              if (d > 1) nested = true;
+            } else if (tokens[j].type === "op" && tokens[j].value === closeB) {
+              d -= 1;
+              if (d === 0) break;
+            }
+          }
+          if (nested || j >= tokens.length) {
+            i += 1;
+            continue;
+          }
+          for (let b = i + 2; b < j; b += 1) out.push(tokens[b]);
+          i = j + 1;
+        }
+        return out;
+      }
+
       function compareCodesFlexible(expectedSrc, typedSrc, lang) {
         const kw = gradeKeywordSet(lang);
-        const exp = tokenizeForGrade(expectedSrc);
-        const got = tokenizeForGrade(typedSrc);
+        const exp = stripOptionalControlBraces(tokenizeForGrade(expectedSrc));
+        const got = stripOptionalControlBraces(tokenizeForGrade(typedSrc));
         const map = {};
         const rev = {};
         const issues = [];
@@ -3948,6 +4039,28 @@
         return html;
       }
 
+      function reciteIndentUnit(lang) {
+        return lang === "python" ? "    " : "    ";
+      }
+
+      function reciteUsesBraces(lang) {
+        return lang !== "python";
+      }
+
+      function reciteShouldIncreaseIndent(line, lang) {
+        const trimmed = String(line || "").replace(/\s+$/, "");
+        if (lang === "python") return /:$/.test(trimmed);
+        return /\{$/.test(trimmed);
+      }
+
+      function reciteOutdent(indent, lang) {
+        const unit = reciteIndentUnit(lang);
+        if (indent.endsWith(unit)) return indent.slice(0, -unit.length);
+        if (indent.endsWith("\t")) return indent.slice(0, -1);
+        if (indent.endsWith("  ")) return indent.slice(0, -2);
+        return indent.replace(/[ \t]$/, "");
+      }
+
       function insertReciteText(editor, text) {
         const start = editor.selectionStart;
         const end = editor.selectionEnd;
@@ -3971,22 +4084,59 @@
           }
           return;
         }
+        const lang = state.lang || "c";
+        const unit = reciteIndentUnit(lang);
         if (e.key === "Tab") {
           e.preventDefault();
-          insertReciteText(editor, "    ");
+          insertReciteText(editor, unit);
+          return;
+        }
+        if (e.key === "}" && reciteUsesBraces(lang) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const value = editor.value;
+          const start = editor.selectionStart;
+          const end = editor.selectionEnd;
+          const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+          const before = value.slice(lineStart, start);
+          if (/^[ \t]*$/.test(before)) {
+            e.preventDefault();
+            const indent = reciteOutdent(before, lang);
+            editor.value = value.slice(0, lineStart) + indent + "}" + value.slice(end);
+            const pos = lineStart + indent.length + 1;
+            editor.selectionStart = editor.selectionEnd = pos;
+            if (state.play && state.play.kind === "recite") {
+              state.play.typedText = editor.value;
+              if (!state.play.startedAt) state.play.startedAt = Date.now();
+              updateGameHud();
+            }
+          }
           return;
         }
         if (e.key !== "Enter" || e.shiftKey) return;
         e.preventDefault();
         const value = editor.value;
         const start = editor.selectionStart;
+        const end = editor.selectionEnd;
         const lineStart = value.lastIndexOf("\n", start - 1) + 1;
         const before = value.slice(lineStart, start);
         const lead = before.match(/^[ \t]*/);
         let indent = lead ? lead[0] : "";
-        const trimmed = before.replace(/\s+$/, "");
-        if (/\{$/.test(trimmed) || /:$/.test(trimmed)) {
-          indent += indent.indexOf("\t") >= 0 ? "\t" : "    ";
+        const restSameLine = value.slice(start, value.indexOf("\n", start) === -1 ? value.length : value.indexOf("\n", start));
+        if (reciteShouldIncreaseIndent(before, lang)) {
+          const nextIndent = indent + unit;
+          if (reciteUsesBraces(lang) && /^\s*\}/.test(restSameLine)) {
+            const closeIndent = indent;
+            const insert = "\n" + nextIndent + "\n" + closeIndent;
+            editor.value = value.slice(0, start) + insert + value.slice(end);
+            const pos = start + 1 + nextIndent.length;
+            editor.selectionStart = editor.selectionEnd = pos;
+            if (state.play && state.play.kind === "recite") {
+              state.play.typedText = editor.value;
+              if (!state.play.startedAt) state.play.startedAt = Date.now();
+              updateGameHud();
+            }
+            return;
+          }
+          indent = nextIndent;
         }
         insertReciteText(editor, "\n" + indent);
       }
@@ -3997,7 +4147,7 @@
         el.board.innerHTML =
           '<div class="recite-editor-wrap">' +
           '<textarea id="reciteEditor" class="recite-editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="기억한 코드를 여기에 작성한 뒤 제출하세요."></textarea>' +
-          '<div class="recite-editor-hint">Enter 시 자동 들여쓰기 · Tab으로 들여쓰기 · 작성 후 제출하세요. 변수 이름·중괄호 위치·띄어쓰기는 유연하게 채점합니다.</div>' +
+          '<div class="recite-editor-hint">언어별 자동 들여쓰기({ / } · Tab) · if() stmt 와 if() { stmt } 는 같게 채점합니다. 작성 후 제출하세요.</div>' +
           "</div>";
         const editor = document.getElementById("reciteEditor");
         if (editor) {
@@ -4755,15 +4905,17 @@
         const max = Math.max(1, Math.max.apply(null, points.map(function (p) { return p.value; })));
         const innerW = w - padL - padR;
         const innerH = h - padT - padB;
-        const coords = points.map(function (p, i) {
-          const x = points.length === 1
-            ? padL + innerW / 2
-            : padL + (i / (points.length - 1)) * innerW;
+        // Always start from (0,0) so the trend rises from the origin.
+        const plot = [{ day: "", value: 0, n: 0, origin: true }].concat(points);
+        const coords = plot.map(function (p, i) {
+          const x = plot.length === 1
+            ? padL
+            : padL + (i / (plot.length - 1)) * innerW;
           const y = padT + innerH - (p.value / max) * innerH;
           return { x: x, y: y, p: p };
         });
         const poly = coords.map(function (c) { return c.x.toFixed(1) + "," + c.y.toFixed(1); }).join(" ");
-        const dots = coords.map(function (c) {
+        const dots = coords.filter(function (c) { return !c.p.origin; }).map(function (c) {
           const tip = c.p.day + " · " + c.p.value + unit + (c.p.n > 1 ? " (평균 " + c.p.n + "회)" : "");
           return '<circle class="line-dot" cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) +
             '" r="4.5" data-tip="' + esc(tip) + '"></circle>';
