@@ -115,13 +115,38 @@ test("mypage tracks per-key and finger stats for English/symbols", () => {
   assert.match(extractFunction(html, "myPagePanelHtml"), /keySpeed/);
   assert.match(extractFunction(html, "myPagePanelHtml"), /finger/);
   assert.match(extractFunction(html, "myPagePanelHtml"), /renderKeyStatGrid/);
-  assert.match(extractFunction(html, "myPagePanelHtml"), /renderMyPageChart\(fingerSpeedEntries/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /renderMyPageChart\(fingerSpeedEntries[\s\S]*fill:\s*true/);
   assert.match(extractFunction(html, "renderMyPage"), /글쇠별타수/);
   assert.match(extractFunction(html, "renderMyPage"), /글쇠별정확도/);
   assert.match(extractFunction(html, "renderMyPage"), /글쇠별속도/);
   assert.match(extractFunction(html, "renderMyPage"), /손가락빠르기/);
   assert.match(extractFunction(html, "syncCatcherValue"), /recordKeyStat/);
   assert.match(html, /loadKeyStats\(\)/);
+});
+
+test("practice speed keeps 40 and code trends use daily line charts", () => {
+  assert.match(html, /PRACTICE_KEEP\s*=\s*40/);
+  assert.match(html, /CODE_TRENDS_KEY/);
+  assert.match(extractFunction(html, "prunePracticeRecords"), /PRACTICE_KEEP/);
+  assert.match(extractFunction(html, "prunePracticeRecords"), /persistRecords\(\)/);
+  assert.doesNotMatch(extractFunction(html, "prunePracticeRecords"), /deleteDoc/);
+  assert.match(extractFunction(html, "saveRecord"), /recordPracticeTrend/);
+  assert.match(extractFunction(html, "saveRecord"), /prunePracticeRecords/);
+  assert.match(extractFunction(html, "renderTrendLineChart"), /line-path/);
+  assert.match(extractFunction(html, "renderTrendLineChart"), /line-dot/);
+  assert.match(extractFunction(html, "trendAxisTicks"), /년/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /renderTrendLineChart/);
+  assert.match(extractFunction(html, "renderMyPage"), /bindTrendLineHovers/);
+});
+
+test("cloud sync keeps my codes and meta stats across devices", () => {
+  assert.match(extractFunction(html, "applyCloudList"), /mergeSnippetLists/);
+  assert.match(extractFunction(html, "applyCloudList"), /uploadLocalOnlySnippets/);
+  assert.match(extractFunction(html, "subscribeCloudSnippets"), /unsubscribeCloudSnippets/);
+  assert.match(extractFunction(html, "onUserSignedIn"), /subscribeCloudMeta/);
+  assert.match(extractFunction(html, "persistKeyStats"), /writeKeyStatsCloud|keyStatsCloudTimer/);
+  assert.match(extractFunction(html, "keyStatEntries"), /localeCompare/);
+  assert.match(html, /mypage-chart-wrap\.fill[\s\S]*flex:\s*1\s+1\s+0\s*!important/);
 });
 
 test("practice start warns when snippet is unsaved", () => {
@@ -142,8 +167,8 @@ test("range list checks user snippets and leaves presets unchecked", () => {
 });
 
 test("records persist locally even when logged in", () => {
-  const saveFn = extractFunction(html, "saveRecord");
-  assert.match(saveFn, /persistRecords\(\)/);
+  assert.match(extractFunction(html, "saveRecord"), /prunePracticeRecords\(\)/);
+  assert.match(extractFunction(html, "prunePracticeRecords"), /persistRecords\(\)/);
   assert.match(extractFunction(html, "persistRecords"), /localStorage\.setItem\(RECORDS_KEY/);
   assert.doesNotMatch(extractFunction(html, "persistRecords"), /if \(state\.user\) return/);
   assert.match(html, /result-clear/);

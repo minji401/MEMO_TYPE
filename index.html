@@ -1019,6 +1019,15 @@
       color: var(--caret);
       font-weight: 600;
     }
+    .mypage-chart-wrap {
+      padding-top: 8px;
+      min-height: 236px;
+    }
+    .mypage-chart-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+    }
     .mypage-chart {
       display: flex;
       align-items: flex-end;
@@ -1028,8 +1037,8 @@
       min-height: 200px;
       padding: 22px 4px 0;
       border-bottom: 1px solid var(--sub-alt);
-      overflow-x: auto;
       box-sizing: border-box;
+      min-width: min-content;
     }
     .mypage-chart .bar {
       flex: 0 0 32px;
@@ -1048,16 +1057,13 @@
       color: var(--sub);
       white-space: nowrap;
     }
-    .mypage-chart-wrap {
-      padding-top: 8px;
-      min-height: 236px;
-    }
     .mypage-chart-labels {
       display: flex;
       justify-content: flex-start;
       gap: 10px;
       margin-top: 8px;
       min-height: 28px;
+      min-width: min-content;
     }
     .mypage-chart-labels span {
       flex: 0 0 32px;
@@ -1068,6 +1074,93 @@
       line-height: 1.3;
       word-break: keep-all;
     }
+    .mypage-chart-wrap.fill {
+      width: 100%;
+    }
+    .mypage-chart-wrap.fill .mypage-chart-scroll {
+      overflow-x: hidden;
+      width: 100%;
+    }
+    .mypage-chart-wrap.fill .mypage-chart,
+    .mypage-chart-wrap.fill .mypage-chart-labels {
+      width: 100%;
+      min-width: 0 !important;
+      justify-content: stretch;
+    }
+    .mypage-chart-wrap.fill .mypage-chart .bar,
+    .mypage-chart-wrap.fill .mypage-chart-labels span {
+      flex: 1 1 0 !important;
+      width: auto !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
+    .mypage-line-block {
+      margin-bottom: 22px;
+    }
+    .mypage-line-block b {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .mypage-line-wrap {
+      position: relative;
+      height: 200px;
+      min-height: 200px;
+      padding: 8px 4px 0;
+      box-sizing: border-box;
+    }
+    .mypage-line-wrap svg {
+      width: 100%;
+      height: 168px;
+      display: block;
+      overflow: visible;
+    }
+    .mypage-line-wrap .line-path {
+      fill: none;
+      stroke: var(--caret);
+      stroke-width: 2.5;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .mypage-line-wrap .line-dot {
+      fill: var(--caret);
+      stroke: var(--bg);
+      stroke-width: 2;
+      cursor: pointer;
+    }
+    .mypage-line-wrap .line-dot:hover {
+      fill: #ffe08a;
+    }
+    .mypage-line-axis {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      min-height: 20px;
+      border-top: 1px solid var(--sub-alt);
+      padding-top: 6px;
+    }
+    .mypage-line-axis span {
+      font-size: 10px;
+      color: var(--sub);
+      white-space: nowrap;
+    }
+    .mypage-line-tip {
+      position: absolute;
+      z-index: 3;
+      pointer-events: none;
+      transform: translate(-50%, calc(-100% - 10px));
+      background: var(--bg-soft);
+      border: 1px solid var(--sub-alt);
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    .mypage-line-tip.show { opacity: 1; }
     .mypage-key-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -1407,7 +1500,7 @@
       <textarea id="rawCode" spellcheck="false" placeholder="연습할 코드 본문"></textarea>
       </div>
       <div class="modal-actions">
-        <span style="color: var(--sub); font-size: 12px; align-self: center;">* 목록은 typing_snippets 키로 이 브라우저에만 저장됩니다.</span>
+        <span style="color: var(--sub); font-size: 12px; align-self: center;">* 로그인 시 코드·기록은 계정에 동기화됩니다. 비로그인 시 이 브라우저에만 저장됩니다.</span>
         <div>
           <button type="button" class="btn" id="cancelSnippetBtn">취소</button>
           <button type="button" class="btn" id="saveSnippetBtn">저장</button>
@@ -1458,6 +1551,8 @@
       const SNIPPETS_KEY = "typing_snippets";
       const RECORDS_KEY = "memotype_records_v1";
       const KEY_STATS_KEY = "memotype_keystats_v1";
+      const CODE_TRENDS_KEY = "memotype_code_trends_v1";
+      const PRACTICE_KEEP = 40;
 
       const KEYWORDS = {
         c: new Set([
@@ -2104,7 +2199,9 @@
         inputLocked: false,
         records: [],
         unsubRecords: null,
+        unsubMeta: null,
         keyStats: {},
+        codeTrends: {},
         lastKeyAt: null,
         mypageTab: "speed"
       };
@@ -2278,27 +2375,75 @@
         });
       }
 
-      function unsubscribeCloud() {
-        if (typeof state.unsubSnippets === "function") {
-          state.unsubSnippets();
-        }
+      function unsubscribeCloudSnippets() {
+        if (typeof state.unsubSnippets === "function") state.unsubSnippets();
         state.unsubSnippets = null;
-        if (typeof state.unsubRecords === "function") {
-          state.unsubRecords();
-        }
+      }
+
+      function unsubscribeCloudRecords() {
+        if (typeof state.unsubRecords === "function") state.unsubRecords();
         state.unsubRecords = null;
+      }
+
+      function unsubscribeCloudMeta() {
+        if (typeof state.unsubMeta === "function") state.unsubMeta();
+        state.unsubMeta = null;
+      }
+
+      function unsubscribeCloud() {
+        unsubscribeCloudSnippets();
+        unsubscribeCloudRecords();
+        unsubscribeCloudMeta();
+      }
+
+      function mergeSnippetLists(cloudList, localList) {
+        const map = {};
+        (localList || []).concat(cloudList || []).forEach(function (item) {
+          if (!item || !item.id || isBuiltInSnippet(item)) return;
+          const prev = map[item.id];
+          if (!prev || String(item.updatedAt || "") >= String(prev.updatedAt || "")) {
+            map[item.id] = item;
+          }
+        });
+        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
+          return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+        });
+      }
+
+      function uploadLocalOnlySnippets(cloudList) {
+        if (!isLoggedIn()) return;
+        const cloudIds = {};
+        (cloudList || []).forEach(function (item) {
+          if (item && item.id) cloudIds[item.id] = true;
+        });
+        readLocalSnippets().forEach(function (item) {
+          if (!item || !item.id || isBuiltInSnippet(item) || cloudIds[item.id]) return;
+          if (!String(item.code || "").trim()) return;
+          setDoc(snippetDoc(state.user.uid, item.id), {
+            id: item.id,
+            title: item.title || "제목 없음",
+            code: item.code,
+            lang: snippetLang(item),
+            updatedAt: item.updatedAt || new Date().toISOString()
+          }, { merge: true }).catch(function () {});
+        });
       }
 
       function applyCloudList(list) {
         const prevId = state.snippetId;
         const modalOpen = el.overlay.classList.contains("show");
-        state.snippets = (list || []).filter(function (item) {
-          return !isBuiltInSnippet(item);
+        const cloud = (list || []).filter(function (item) {
+          return item && item.id && !isBuiltInSnippet(item);
         });
+        // Keep local-only codes visible until they are uploaded, so the first-login
+        // dropdown does not briefly (or permanently) lose "내 코드".
+        state.snippets = mergeSnippetLists(cloud, readLocalSnippets());
+        uploadLocalOnlySnippets(cloud);
         renderSnippetSelects();
         const cur = findSnippet(prevId);
         if (cur) {
           if (modalOpen && !state.creatingSnippet) fillModalFromSnippet(cur);
+          if (el.snippetSelect) el.snippetSelect.value = cur.id;
           return;
         }
         const first = visibleSnippets(state.lang)[0];
@@ -2334,7 +2479,7 @@
       }
 
       function subscribeCloudSnippets(uid) {
-        unsubscribeCloud();
+        unsubscribeCloudSnippets();
         state.unsubSnippets = onSnapshot(snippetsCol(uid), function (snap) {
           const list = [];
           snap.forEach(function (d) {
@@ -2492,15 +2637,14 @@
         if (!state.user || state.user.uid !== user.uid) return;
         subscribeCloudSnippets(user.uid);
         subscribeCloudRecords(user.uid);
+        subscribeCloudMeta(user.uid);
+        renderSnippetSelects();
       }
 
       function onUserSignedOut() {
         const hadUser = isLoggedIn();
         state.user = null;
-        if (typeof state.unsubRecords === "function") {
-          state.unsubRecords();
-          state.unsubRecords = null;
-        }
+        unsubscribeCloud();
         renderAuthUI();
         if (hadUser) restoreLocalSnippets();
         closeMyPage();
@@ -3150,6 +3294,9 @@
 
       function loadRecords() {
         state.records = readLocalRecords();
+        loadCodeTrends();
+        bootstrapCodeTrendsFromRecords();
+        prunePracticeRecords();
       }
 
       function isTrackableKey(ch) {
@@ -3180,6 +3327,11 @@
         return map[ch] || null;
       }
 
+      let keyStatsCloudTimer = null;
+      let codeTrendsCloudTimer = null;
+      let keyStatsSynced = false;
+      let codeTrendsSynced = false;
+
       function loadKeyStats() {
         try {
           const saved = localStorage.getItem(KEY_STATS_KEY);
@@ -3190,10 +3342,41 @@
         }
       }
 
+      function writeKeyStatsCloud() {
+        if (!isLoggedIn()) return;
+        setDoc(doc(firebaseDb, "users", state.user.uid, "meta", "keyStats"), {
+          data: state.keyStats || {},
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(function () {});
+      }
+
       function persistKeyStats() {
         try {
           localStorage.setItem(KEY_STATS_KEY, JSON.stringify(state.keyStats));
         } catch (e) {}
+        if (!isLoggedIn()) return;
+        clearTimeout(keyStatsCloudTimer);
+        keyStatsCloudTimer = setTimeout(writeKeyStatsCloud, 1200);
+      }
+
+      function mergeKeyStats(a, b) {
+        const out = {};
+        const keys = {};
+        [a || {}, b || {}].forEach(function (src) {
+          Object.keys(src).forEach(function (ch) { keys[ch] = true; });
+        });
+        Object.keys(keys).forEach(function (ch) {
+          const left = (a && a[ch]) || {};
+          const right = (b && b[ch]) || {};
+          out[ch] = {
+            hits: Number(left.hits || 0) + Number(right.hits || 0),
+            correct: Number(left.correct || 0) + Number(right.correct || 0),
+            wrong: Number(left.wrong || 0) + Number(right.wrong || 0),
+            totalMs: Number(left.totalMs || 0) + Number(right.totalMs || 0),
+            timedHits: Number(left.timedHits || 0) + Number(right.timedHits || 0)
+          };
+        });
+        return out;
       }
 
       function recordKeyStat(ch, ok) {
@@ -3220,7 +3403,7 @@
         return Object.keys(state.keyStats || {}).filter(function (ch) {
           return isTrackableKey(ch) && (state.keyStats[ch].hits || 0) > 0;
         }).sort(function (a, b) {
-          return (state.keyStats[b].hits || 0) - (state.keyStats[a].hits || 0);
+          return a.localeCompare(b);
         });
       }
 
@@ -3272,7 +3455,7 @@
 
       function persistRecords() {
         try {
-          localStorage.setItem(RECORDS_KEY, JSON.stringify(state.records.slice(0, 400)));
+          localStorage.setItem(RECORDS_KEY, JSON.stringify(state.records));
         } catch (e) {}
       }
 
@@ -3288,12 +3471,200 @@
         });
       }
 
+      function dayKeyFromIso(iso) {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "";
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+
+      function loadCodeTrends() {
+        try {
+          const saved = localStorage.getItem(CODE_TRENDS_KEY);
+          const parsed = saved ? JSON.parse(saved) : {};
+          state.codeTrends = parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+          state.codeTrends = {};
+        }
+      }
+
+      function writeCodeTrendsCloud() {
+        if (!isLoggedIn()) return;
+        setDoc(doc(firebaseDb, "users", state.user.uid, "meta", "codeTrends"), {
+          data: state.codeTrends || {},
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(function () {});
+      }
+
+      function persistCodeTrends() {
+        try {
+          localStorage.setItem(CODE_TRENDS_KEY, JSON.stringify(state.codeTrends || {}));
+        } catch (e) {}
+        if (!isLoggedIn()) return;
+        clearTimeout(codeTrendsCloudTimer);
+        codeTrendsCloudTimer = setTimeout(writeCodeTrendsCloud, 1200);
+      }
+
+      function mergeCodeTrends(a, b) {
+        const out = {};
+        const keys = {};
+        [a || {}, b || {}].forEach(function (src) {
+          Object.keys(src).forEach(function (id) { keys[id] = true; });
+        });
+        Object.keys(keys).forEach(function (id) {
+          const left = (a && a[id]) || { title: "", byDay: {} };
+          const right = (b && b[id]) || { title: "", byDay: {} };
+          const byDay = {};
+          const days = {};
+          [left.byDay || {}, right.byDay || {}].forEach(function (src) {
+            Object.keys(src).forEach(function (day) { days[day] = true; });
+          });
+          Object.keys(days).forEach(function (day) {
+            const l = (left.byDay && left.byDay[day]) || { sum: 0, n: 0 };
+            const r = (right.byDay && right.byDay[day]) || { sum: 0, n: 0 };
+            // Same-day rows from two devices: keep the side with more samples.
+            byDay[day] = (Number(r.n || 0) > Number(l.n || 0))
+              ? { sum: Number(r.sum || 0), n: Number(r.n || 0) }
+              : { sum: Number(l.sum || 0), n: Number(l.n || 0) };
+            if (Number(l.n || 0) === Number(r.n || 0) && Number(r.sum || 0) > Number(l.sum || 0)) {
+              byDay[day] = { sum: Number(r.sum || 0), n: Number(r.n || 0) };
+            }
+          });
+          out[id] = {
+            title: right.title || left.title || "코드",
+            byDay: byDay
+          };
+        });
+        return out;
+      }
+
+      function subscribeCloudMeta(uid) {
+        unsubscribeCloudMeta();
+        keyStatsSynced = false;
+        codeTrendsSynced = false;
+        const keyRef = doc(firebaseDb, "users", uid, "meta", "keyStats");
+        const trendRef = doc(firebaseDb, "users", uid, "meta", "codeTrends");
+        let unsubKey = null;
+        let unsubTrend = null;
+        unsubKey = onSnapshot(keyRef, function (snap) {
+          const remote = snap.exists() ? ((snap.data() || {}).data || {}) : {};
+          if (!keyStatsSynced) {
+            state.keyStats = mergeKeyStats(remote, readLocalKeyStats());
+            keyStatsSynced = true;
+            try {
+              localStorage.setItem(KEY_STATS_KEY, JSON.stringify(state.keyStats));
+            } catch (e) {}
+            writeKeyStatsCloud();
+          } else {
+            state.keyStats = remote && typeof remote === "object" ? remote : {};
+            try {
+              localStorage.setItem(KEY_STATS_KEY, JSON.stringify(state.keyStats));
+            } catch (e) {}
+          }
+          if (document.body.classList.contains("view-mypage")) renderMyPage();
+        }, function () {});
+        unsubTrend = onSnapshot(trendRef, function (snap) {
+          const remote = snap.exists() ? ((snap.data() || {}).data || {}) : {};
+          if (!codeTrendsSynced) {
+            state.codeTrends = mergeCodeTrends(remote, readLocalCodeTrends());
+            codeTrendsSynced = true;
+            try {
+              localStorage.setItem(CODE_TRENDS_KEY, JSON.stringify(state.codeTrends));
+            } catch (e) {}
+            writeCodeTrendsCloud();
+          } else {
+            state.codeTrends = remote && typeof remote === "object" ? remote : {};
+            try {
+              localStorage.setItem(CODE_TRENDS_KEY, JSON.stringify(state.codeTrends));
+            } catch (e) {}
+          }
+          if (document.body.classList.contains("view-mypage")) renderMyPage();
+        }, function () {});
+        state.unsubMeta = function () {
+          if (typeof unsubKey === "function") unsubKey();
+          if (typeof unsubTrend === "function") unsubTrend();
+        };
+      }
+
+      function readLocalKeyStats() {
+        try {
+          const saved = localStorage.getItem(KEY_STATS_KEY);
+          const parsed = saved ? JSON.parse(saved) : {};
+          return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function readLocalCodeTrends() {
+        try {
+          const saved = localStorage.getItem(CODE_TRENDS_KEY);
+          const parsed = saved ? JSON.parse(saved) : {};
+          return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function recordPracticeTrend(rec) {
+        if (!rec || rec.type !== "practice") return;
+        const key = rec.snippetId || rec.title || "기타";
+        const day = dayKeyFromIso(rec.at);
+        if (!day) return;
+        if (!state.codeTrends[key]) {
+          state.codeTrends[key] = { title: rec.title || "코드", byDay: {} };
+        }
+        const bucket = state.codeTrends[key];
+        if (rec.title) bucket.title = rec.title;
+        if (!bucket.byDay[day]) bucket.byDay[day] = { sum: 0, n: 0 };
+        bucket.byDay[day].sum += Number(rec.wpm || 0);
+        bucket.byDay[day].n += 1;
+        persistCodeTrends();
+      }
+
+      function bootstrapCodeTrendsFromRecords() {
+        const practice = (state.records || []).filter(function (r) { return r && r.type === "practice"; });
+        if (!practice.length) return;
+        const empty = !state.codeTrends || !Object.keys(state.codeTrends).length;
+        if (!empty) return;
+        practice.forEach(function (rec) {
+          const key = rec.snippetId || rec.title || "기타";
+          const day = dayKeyFromIso(rec.at);
+          if (!day) return;
+          if (!state.codeTrends[key]) {
+            state.codeTrends[key] = { title: rec.title || "코드", byDay: {} };
+          }
+          const bucket = state.codeTrends[key];
+          if (rec.title) bucket.title = rec.title;
+          if (!bucket.byDay[day]) bucket.byDay[day] = { sum: 0, n: 0 };
+          bucket.byDay[day].sum += Number(rec.wpm || 0);
+          bucket.byDay[day].n += 1;
+        });
+        persistCodeTrends();
+      }
+
+      function prunePracticeRecords() {
+        const practice = [];
+        const others = [];
+        (state.records || []).forEach(function (r) {
+          if (!r) return;
+          if (r.type === "practice") practice.push(r);
+          else others.push(r);
+        });
+        const kept = practice.slice(0, PRACTICE_KEEP);
+        // Keep only recent practice rows in the client view/storage.
+        // Do not delete cloud docs; that wiped other device histories.
+        state.records = mergeRecordLists(kept.concat(others), []);
+        persistRecords();
+        return practice.slice(PRACTICE_KEEP);
+      }
+
       function saveRecord(rec) {
         rec.id = rec.id || ("rec_" + Date.now() + "_" + Math.floor(Math.random() * 1000));
         rec.at = rec.at || new Date().toISOString();
+        if (rec.type === "practice") recordPracticeTrend(rec);
         state.records.unshift(rec);
         state.records = mergeRecordLists(state.records, []);
-        persistRecords();
+        prunePracticeRecords();
         if (isLoggedIn()) {
           setDoc(doc(firebaseDb, "users", state.user.uid, "records", rec.id), rec, { merge: true }).catch(function () {});
         }
@@ -3309,11 +3680,12 @@
             list.push(data);
           });
           state.records = mergeRecordLists(list, readLocalRecords());
-          persistRecords();
+          bootstrapCodeTrendsFromRecords();
+          prunePracticeRecords();
           if (document.body.classList.contains("view-mypage")) renderMyPage();
         }, function () {
           state.records = mergeRecordLists(state.records, readLocalRecords());
-          persistRecords();
+          prunePracticeRecords();
         });
       }
 
@@ -4256,22 +4628,130 @@
         return Math.round(sum / list.length);
       }
 
-      function renderMyPageChart(values, unit, withLabels) {
+      function renderMyPageChart(values, unit, opts) {
+        opts = opts || {};
         if (!values.length) return '<p class="note">아직 데이터가 없습니다.</p>';
         const max = Math.max(1, Math.max.apply(null, values.map(function (v) { return v.value; })));
         const plotH = 160;
-        const bars = '<div class="mypage-chart">' + values.map(function (v) {
+        const fill = !!opts.fill;
+        const wrapClass = "mypage-chart-wrap" + (fill ? " fill" : "");
+        let inner = '<div class="mypage-chart">' + values.map(function (v) {
           const h = Math.max(4, Math.round((v.value / max) * plotH));
           return '<div class="bar" style="height:' + h + 'px" title="' + esc(v.label) + ": " + v.value + unit +
             '"><span>' + v.value + "</span></div>";
         }).join("") + "</div>";
-        if (!withLabels) {
-          return '<div class="mypage-chart-wrap">' + bars + "</div>";
-        }
-        return '<div class="mypage-chart-wrap">' + bars +
-          '<div class="mypage-chart-labels">' + values.map(function (v) {
+        if (opts.labels) {
+          inner += '<div class="mypage-chart-labels">' + values.map(function (v) {
             return "<span>" + esc(v.label) + "</span>";
-          }).join("") + "</div></div>";
+          }).join("") + "</div>";
+        }
+        return '<div class="' + wrapClass + '"><div class="mypage-chart-scroll">' + inner + "</div></div>";
+      }
+
+      function codeTrendSeries(entry) {
+        const byDay = (entry && entry.byDay) || {};
+        return Object.keys(byDay).sort().map(function (day) {
+          const row = byDay[day];
+          const avg = row && row.n ? Math.round(row.sum / row.n) : 0;
+          return { day: day, value: avg, n: row ? row.n : 0 };
+        });
+      }
+
+      function trendAxisTicks(points) {
+        if (!points.length) return [];
+        const first = points[0].day;
+        const last = points[points.length - 1].day;
+        const t0 = new Date(first + "T00:00:00").getTime();
+        const t1 = new Date(last + "T00:00:00").getTime();
+        const spanDays = Math.max(0, Math.round((t1 - t0) / 86400000));
+        const useYear = spanDays > 400 || (first.slice(0, 4) !== last.slice(0, 4) && spanDays > 180);
+        const seen = {};
+        const ticks = [];
+        points.forEach(function (p, i) {
+          const d = new Date(p.day + "T00:00:00");
+          if (isNaN(d.getTime())) return;
+          let label = "";
+          let key = "";
+          if (useYear) {
+            key = String(d.getFullYear());
+            label = key + "년";
+          } else {
+            key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+            label = d.getFullYear() + "년 " + (d.getMonth() + 1) + "월";
+          }
+          if (seen[key]) return;
+          seen[key] = true;
+          ticks.push({ index: i, label: label });
+        });
+        if (ticks.length === 1 && points.length > 1) {
+          ticks.push({ index: points.length - 1, label: ticks[0].label });
+        }
+        return ticks.slice(0, 6);
+      }
+
+      function renderTrendLineChart(points, unit) {
+        if (!points.length) return '<p class="note">날짜별 기록이 없습니다.</p>';
+        const w = 600;
+        const h = 168;
+        const padL = 8;
+        const padR = 8;
+        const padT = 16;
+        const padB = 10;
+        const max = Math.max(1, Math.max.apply(null, points.map(function (p) { return p.value; })));
+        const innerW = w - padL - padR;
+        const innerH = h - padT - padB;
+        const coords = points.map(function (p, i) {
+          const x = points.length === 1
+            ? padL + innerW / 2
+            : padL + (i / (points.length - 1)) * innerW;
+          const y = padT + innerH - (p.value / max) * innerH;
+          return { x: x, y: y, p: p };
+        });
+        const poly = coords.map(function (c) { return c.x.toFixed(1) + "," + c.y.toFixed(1); }).join(" ");
+        const dots = coords.map(function (c) {
+          const tip = c.p.day + " · " + c.p.value + unit + (c.p.n > 1 ? " (평균 " + c.p.n + "회)" : "");
+          return '<circle class="line-dot" cx="' + c.x.toFixed(1) + '" cy="' + c.y.toFixed(1) +
+            '" r="4.5" data-tip="' + esc(tip) + '"></circle>';
+        }).join("");
+        const ticks = trendAxisTicks(points);
+        let axis = '<div class="mypage-line-axis">';
+        if (!ticks.length) {
+          axis += "<span></span>";
+        } else {
+          ticks.forEach(function (t) { axis += "<span>" + esc(t.label) + "</span>"; });
+        }
+        axis += "</div>";
+        return '<div class="mypage-line-wrap"><div class="mypage-line-tip" hidden></div>' +
+          '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet">' +
+          '<polyline class="line-path" points="' + poly + '"></polyline>' + dots +
+          "</svg>" + axis + "</div>";
+      }
+
+      function bindTrendLineHovers(root) {
+        if (!root) return;
+        root.querySelectorAll(".mypage-line-wrap").forEach(function (wrap) {
+          const tip = wrap.querySelector(".mypage-line-tip");
+          if (!tip) return;
+          wrap.querySelectorAll(".line-dot").forEach(function (dot) {
+            dot.addEventListener("mouseenter", function (e) {
+              tip.textContent = dot.getAttribute("data-tip") || "";
+              tip.hidden = false;
+              tip.classList.add("show");
+              const rect = wrap.getBoundingClientRect();
+              tip.style.left = (e.clientX - rect.left) + "px";
+              tip.style.top = (e.clientY - rect.top) + "px";
+            });
+            dot.addEventListener("mousemove", function (e) {
+              const rect = wrap.getBoundingClientRect();
+              tip.style.left = (e.clientX - rect.left) + "px";
+              tip.style.top = (e.clientY - rect.top) + "px";
+            });
+            dot.addEventListener("mouseleave", function () {
+              tip.classList.remove("show");
+              tip.hidden = true;
+            });
+          });
+        });
       }
 
       function renderKeyStatGrid(formatter) {
@@ -4304,10 +4784,11 @@
         const recite = state.records.filter(function (r) { return r.type === "game_recite"; });
         const spot = state.records.filter(function (r) { return r.type === "game_spot"; });
         if (tab === "speed") {
-          const recent = practice.slice(0, 16).reverse().map(function (r, i) {
+          const recent = practice.slice(0, PRACTICE_KEEP).reverse().map(function (r, i) {
             return { label: String(i + 1), value: r.wpm || 0 };
           });
-          return "<h3 style='margin-bottom:12px;color:var(--caret)'>타자 속도 (WPM)</h3>" + renderMyPageChart(recent, " WPM");
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>타자 속도 (WPM)</h3>" +
+            renderMyPageChart(recent, " WPM");
         }
         if (tab === "practice") {
           const rows = practice.slice(0, 40).map(function (r) {
@@ -4350,23 +4831,24 @@
         }
         if (tab === "finger") {
           return "<h3 style='margin-bottom:12px;color:var(--caret)'>손가락 빠르기</h3>" +
-            renderMyPageChart(fingerSpeedEntries(), "타", true);
+            renderMyPageChart(fingerSpeedEntries(), "타", { labels: true, fill: true });
         }
-        const byCode = {};
-        practice.forEach(function (r) {
-          const key = r.snippetId || r.title || "기타";
-          if (!byCode[key]) byCode[key] = { title: r.title || "코드", items: [] };
-          byCode[key].items.push(r);
+        const trendKeys = Object.keys(state.codeTrends || {}).filter(function (key) {
+          return codeTrendSeries(state.codeTrends[key]).length > 0;
+        }).sort(function (a, b) {
+          const ta = state.codeTrends[a].title || a;
+          const tb = state.codeTrends[b].title || b;
+          return String(ta).localeCompare(String(tb));
         });
-        const keys = Object.keys(byCode);
-        if (!keys.length) return '<p class="note">연습 기록이 쌓이면 코드별 상승이 표시됩니다.</p>';
-        return "<h3 style='margin-bottom:12px;color:var(--caret)'>코드별 추이</h3>" + keys.map(function (key) {
-          const g = byCode[key];
-          const items = g.items.slice().reverse().slice(-12).map(function (x, i) {
-            return { label: String(i + 1), value: x.wpm || 0 };
-          });
-          return '<div style="margin-bottom:18px"><b>' + esc(g.title) + "</b>" + renderMyPageChart(items, " WPM") + "</div>";
-        }).join("");
+        if (!trendKeys.length) return '<p class="note">연습 기록이 쌓이면 코드별 날짜 추이가 표시됩니다.</p>';
+        return "<h3 style='margin-bottom:12px;color:var(--caret)'>코드별 추이</h3>" +
+          '<p class="note" style="margin-bottom:12px">날짜별 평균 WPM · 점에 올리면 값이 보입니다.</p>' +
+          trendKeys.map(function (key) {
+            const g = state.codeTrends[key];
+            const series = codeTrendSeries(g);
+            return '<div class="mypage-line-block"><b>' + esc(g.title || "코드") + "</b>" +
+              renderTrendLineChart(series, " WPM") + "</div>";
+          }).join("");
       }
 
       function renderMyPage() {
@@ -4410,6 +4892,7 @@
             renderMyPage();
           });
         }
+        bindTrendLineHovers(body);
       }
 
       function render() {
