@@ -505,7 +505,53 @@
       font-weight: 500;
       margin-top: 4px;
     }
-    .finish .btn { padding: 10px 16px; font-size: 13px; }
+    .finish .btn { padding: 10px 16px; font-size: 13px; margin: 4px; }
+    .finish-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+
+    .mypage-view {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      flex-direction: column;
+      overflow: auto;
+      background: var(--bg-elev);
+      border: 1px solid var(--sub-alt);
+      border-radius: 14px;
+      padding: 18px 20px 24px;
+    }
+    body.view-mypage .mypage-view { display: flex; }
+    body.view-mypage .workspace,
+    body.view-mypage .top-controls,
+    body.view-mypage footer,
+    body.view-mypage .mobile-dock,
+    body.view-mypage .stats { display: none !important; }
+    .mypage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .mypage-top h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--caret);
+      letter-spacing: 0.04em;
+    }
+    .game-range-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 14px 0 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--caret);
+    }
+    .game-range-group:first-child { margin-top: 0; }
+    .game-range-group .btn { padding: 4px 10px; font-size: 12px; }
+    .result-clear { color: #7dcf8a; font-weight: 600; }
+    .result-out { color: var(--error); font-weight: 600; }
 
     footer {
       display: flex;
@@ -809,7 +855,6 @@
       overflow: auto;
       padding: 4px 2px 12px;
     }
-    .game-range-group { color: var(--sub); font-size: 12px; margin: 8px 0 4px; }
     .game-range-item {
       display: flex;
       align-items: center;
@@ -839,6 +884,8 @@
       font-size: 13px;
     }
     .record-row span { color: var(--sub); }
+    .record-row .result-clear,
+    .record-row .result-out { margin-right: 2px; }
     .trend-bar {
       display: flex;
       align-items: flex-end;
@@ -1002,11 +1049,22 @@
             <div>정확도<b id="finAcc">100%</b></div>
             <div>오타<b id="finErr">0</b></div>
           </div>
-          <button type="button" class="btn primary" id="againBtn">다시 연습</button>
-          <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
+          <div class="finish-actions">
+            <button type="button" class="btn primary" id="againBtn">다시 하기</button>
+            <button type="button" class="btn" id="finishPracticeBtn">연습하기</button>
+            <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
+          </div>
         </div>
       </div>
     </main>
+
+    <section class="mypage-view" id="mypageView" hidden aria-label="마이페이지">
+      <div class="mypage-top">
+        <h2>마이페이지</h2>
+        <button type="button" class="btn" id="mypageBackBtn">연습으로</button>
+      </div>
+      <div id="mypageBody"></div>
+    </section>
 
     <footer>
       <div class="pc-shortcuts">
@@ -1047,7 +1105,7 @@
         <h2 id="gameRangeTitle">연습 범위</h2>
         <button type="button" class="btn ghost" id="gameRangeClose">닫기</button>
       </div>
-      <p class="note">내가 만든 코드는 기본으로 선택되어 있습니다. 기본 연습 코드도 추가할 수 있습니다.</p>
+      <p class="note">내가 만든 코드와 기본 코드를 따로 고를 수 있습니다. 그룹별 모두 선택도 가능합니다.</p>
       <div class="modal-body">
         <div class="game-range-list" id="gameRangeList"></div>
       </div>
@@ -1058,16 +1116,6 @@
           <button type="button" class="btn primary" id="gameRangeStart">시작</button>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div class="overlay" id="mypageOverlay">
-    <div class="modal" role="dialog" aria-labelledby="mypageTitle">
-      <div class="modal-header">
-        <h2 id="mypageTitle">마이페이지</h2>
-        <button type="button" class="btn ghost" id="mypageClose">닫기</button>
-      </div>
-      <div class="modal-body" id="mypageBody"></div>
     </div>
   </div>
 
@@ -2152,6 +2200,19 @@
         }
       }
 
+      async function migrateLocalRecords(uid) {
+        const local = readLocalRecords();
+        if (!local.length) return;
+        try {
+          const batch = writeBatch(firebaseDb);
+          local.slice(0, 200).forEach(function (rec) {
+            if (!rec || !rec.id) return;
+            batch.set(doc(firebaseDb, "users", uid, "records", rec.id), rec, { merge: true });
+          });
+          await batch.commit();
+        } catch (err) {}
+      }
+
       async function onUserSignedIn(user) {
         const wasLoggedIn = isLoggedIn();
         const sameUser = wasLoggedIn && state.user.uid === user.uid;
@@ -2159,6 +2220,7 @@
         renderAuthUI();
         if (sameUser && state.unsubSnippets) return;
         await migrateLocalIfNeeded(user.uid);
+        await migrateLocalRecords(user.uid);
         if (!state.user || state.user.uid !== user.uid) return;
         subscribeCloudSnippets(user.uid);
         subscribeCloudRecords(user.uid);
@@ -2167,8 +2229,13 @@
       function onUserSignedOut() {
         const hadUser = isLoggedIn();
         state.user = null;
+        if (typeof state.unsubRecords === "function") {
+          state.unsubRecords();
+          state.unsubRecords = null;
+        }
         renderAuthUI();
         if (hadUser) restoreLocalSnippets();
+        closeMyPage();
       }
 
       function findSnippet(id) {
@@ -2783,30 +2850,45 @@
       }
 
       function loadRecords() {
+        state.records = readLocalRecords();
+      }
+
+      function readLocalRecords() {
         try {
           const saved = localStorage.getItem(RECORDS_KEY);
           const parsed = saved ? JSON.parse(saved) : [];
-          state.records = Array.isArray(parsed) ? parsed : [];
+          return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-          state.records = [];
+          return [];
         }
       }
 
       function persistRecords() {
-        if (state.user) return;
         try {
           localStorage.setItem(RECORDS_KEY, JSON.stringify(state.records.slice(0, 400)));
         } catch (e) {}
+      }
+
+      function mergeRecordLists(primary, secondary) {
+        const map = {};
+        (secondary || []).concat(primary || []).forEach(function (rec) {
+          if (!rec || !rec.id) return;
+          const prev = map[rec.id];
+          if (!prev || String(rec.at || "") >= String(prev.at || "")) map[rec.id] = rec;
+        });
+        return Object.keys(map).map(function (id) { return map[id]; }).sort(function (a, b) {
+          return String(b.at || "").localeCompare(String(a.at || ""));
+        });
       }
 
       function saveRecord(rec) {
         rec.id = rec.id || ("rec_" + Date.now() + "_" + Math.floor(Math.random() * 1000));
         rec.at = rec.at || new Date().toISOString();
         state.records.unshift(rec);
+        state.records = mergeRecordLists(state.records, []);
+        persistRecords();
         if (isLoggedIn()) {
           setDoc(doc(firebaseDb, "users", state.user.uid, "records", rec.id), rec, { merge: true }).catch(function () {});
-        } else {
-          persistRecords();
         }
       }
 
@@ -2815,12 +2897,16 @@
         state.unsubRecords = onSnapshot(collection(firebaseDb, "users", uid, "records"), function (snap) {
           const list = [];
           snap.forEach(function (d) {
-            list.push(d.data() || {});
+            const data = d.data() || {};
+            if (!data.id) data.id = d.id;
+            list.push(data);
           });
-          list.sort(function (a, b) {
-            return String(b.at || "").localeCompare(String(a.at || ""));
-          });
-          state.records = list;
+          state.records = mergeRecordLists(list, readLocalRecords());
+          persistRecords();
+          if (document.body.classList.contains("view-mypage")) renderMyPage();
+        }, function () {
+          state.records = mergeRecordLists(state.records, readLocalRecords());
+          persistRecords();
         });
       }
 
@@ -2913,18 +2999,32 @@
         const box = document.getElementById("gameRangeList");
         if (!box) return;
         const packs = allSelectableSnippets();
-        let html = '<div class="game-range-group">내 코드</div>';
+        let html = '<div class="game-range-group" data-group="mine"><span>내 코드</span>' +
+          '<button type="button" class="btn ghost range-select-all" data-group="mine">모두 선택</button></div>';
         if (!packs.mine.length) html += '<div class="note">저장한 코드가 없습니다.</div>';
         packs.mine.forEach(function (item) {
-          html += '<label class="game-range-item"><input type="checkbox" checked data-id="' + esc(item.id) + '" />' +
+          html += '<label class="game-range-item" data-group="mine"><input type="checkbox" checked data-id="' +
+            esc(item.id) + '" data-group="mine" />' +
             esc(item.title || "제목 없음") + ' <span>(' + esc((item.lang || "").toUpperCase()) + ")</span></label>";
         });
-        html += '<div class="game-range-group">기본 코드</div>';
+        html += '<div class="game-range-group" data-group="presets"><span>기본 코드</span>' +
+          '<button type="button" class="btn ghost range-select-all" data-group="presets">모두 선택</button></div>';
         packs.presets.forEach(function (item) {
-          html += '<label class="game-range-item"><input type="checkbox" data-id="' + esc(item.id) + '" />' +
+          html += '<label class="game-range-item" data-group="presets"><input type="checkbox" data-id="' +
+            esc(item.id) + '" data-group="presets" />' +
             esc(item.title || "제목 없음") + ' <span>(' + esc((item.lang || "c").toUpperCase()) + ")</span></label>";
         });
         box.innerHTML = html;
+      }
+
+      function toggleRangeGroup(group) {
+        const boxes = document.querySelectorAll('#gameRangeList input[type=checkbox][data-group="' + group + '"]');
+        if (!boxes.length) return;
+        let allOn = true;
+        boxes.forEach(function (cb) { if (!cb.checked) allOn = false; });
+        boxes.forEach(function (cb) { cb.checked = !allOn; });
+        const btn = document.querySelector('#gameRangeList .range-select-all[data-group="' + group + '"]');
+        if (btn) btn.textContent = allOn ? "모두 선택" : "모두 해제";
       }
 
       function selectedRangeSnippets() {
@@ -3055,17 +3155,114 @@
         if (!t) return true;
         if (t.charAt(0) === "#") return true;
         if (t === "{" || t === "}") return true;
-        // typedef struct closer like "} Stack;"
         if (t.charAt(0) === "}" && /;\s*$/.test(t) && t.indexOf("(") === -1) return true;
         if (isTypedefLine(line) || isDeclLine(line, lang)) return true;
         return false;
       }
 
-      function spotLineExistsElsewhere(candidate, original, index) {
-        for (let j = 0; j < original.length; j += 1) {
-          if (j !== index && original[j] === candidate) return true;
+      function spotLineExistsElsewhere(candidate, lines, index) {
+        for (let j = 0; j < lines.length; j += 1) {
+          if (j !== index && lines[j] === candidate) return true;
         }
         return false;
+      }
+
+      function findFunctionRanges(original) {
+        const ranges = [];
+        const skip = /^(if|for|while|switch|return|else|sizeof|catch|main)$/;
+        const openBrace = String.fromCharCode(123);
+        const closeBrace = String.fromCharCode(125);
+        for (let i = 0; i < original.length; i += 1) {
+          const line = original[i];
+          const m = line.match(/([A-Za-z_]\w*)\s*\([^;]*\)/);
+          if (!m || skip.test(m[1])) continue;
+          if (/^\s*(else\s+)?if\b/.test(line) || /^\s*(for|while|switch)\b/.test(line)) continue;
+          const after = line.slice(line.indexOf(m[0]) + m[0].length).trim();
+          if (after && after !== openBrace) continue;
+          let depth = 0;
+          let started = false;
+          let end = i;
+          for (let j = i; j < original.length; j += 1) {
+            const row = original[j];
+            for (let c = 0; c < row.length; c += 1) {
+              if (row[c] === openBrace) {
+                depth += 1;
+                started = true;
+              } else if (row[c] === closeBrace) {
+                depth -= 1;
+              }
+            }
+            end = j;
+            if (started && depth <= 0) break;
+          }
+          if (!started) continue;
+          const body = [];
+          for (let b = i + 1; b <= end; b += 1) {
+            const t = original[b].trim();
+            if (!t || t === openBrace || t === closeBrace) continue;
+            body.push(b);
+          }
+          ranges.push({ name: m[1], start: i, end: end, body: body });
+        }
+        return ranges;
+      }
+
+      function mutateReturnLine(line) {
+        const m = line.match(/^(\s*return\s+)(.+?)(;?\s*)$/);
+        if (!m) return null;
+        const expr = m[2].trim();
+        let nextExpr = null;
+        if (expr === "0") nextExpr = "1";
+        else if (expr === "1") nextExpr = "0";
+        else if (expr === "NULL" || expr === "nullptr") nextExpr = "0";
+        else if (expr === "true") nextExpr = "false";
+        else if (expr === "false") nextExpr = "true";
+        else if (/^-?\d+$/.test(expr)) nextExpr = String(Number(expr) + 1);
+        else if (/^[A-Za-z_]\w*$/.test(expr)) nextExpr = "0";
+        else if (/\(.*\)/.test(expr)) nextExpr = "0";
+        else nextExpr = "0";
+        if (nextExpr === expr) return null;
+        return m[1] + nextExpr + m[3];
+      }
+
+      function mutateIncludeLine(line) {
+        const text = String(line || "");
+        const prefix = text.match(/^\s*#\s*include\s*/);
+        if (!prefix) return null;
+        const rest = text.slice(prefix[0].length);
+        const open = rest.charAt(0);
+        const close = open === "<" ? ">" : (open === String.fromCharCode(34) ? String.fromCharCode(34) : "");
+        if (!close) return null;
+        const end = rest.indexOf(close, 1);
+        if (end < 0) return null;
+        const name = rest.slice(1, end);
+        const pairs = {
+          "stdio.h": "stdbool.h",
+          "stdbool.h": "stdio.h",
+          "stdlib.h": "string.h",
+          "string.h": "stdlib.h",
+          "iostream": "cstdio",
+          "cstdio": "iostream",
+          "vector": "queue",
+          "queue": "vector"
+        };
+        const to = pairs[name];
+        if (!to) return null;
+        return prefix[0] + open + to + close + rest.slice(end + 1);
+      }
+
+      function enforceSpotBodyHints(original, lines, errors, ranges) {
+        ranges.forEach(function (range) {
+          if (!range.body || range.body.length < 2) return;
+          const broken = range.body.filter(function (i) { return !!errors[i]; });
+          const keep = Math.max(1, Math.ceil(range.body.length * 0.4));
+          const maxBroken = Math.max(0, range.body.length - keep);
+          while (broken.length > maxBroken) {
+            const drop = broken.pop();
+            lines[drop] = original[drop];
+            delete errors[drop];
+          }
+        });
       }
 
       function mutateForSpot(source, lang) {
@@ -3073,7 +3270,9 @@
         const lines = original.slice();
         const kw = KEYWORDS[lang] || KEYWORDS.c;
         const vars = [];
-        const funcs = [];
+        const callNames = [];
+        const ranges = findFunctionRanges(original);
+        const defNames = ranges.map(function (r) { return r.name; });
         original.forEach(function (line) {
           const names = identsIn(line);
           if (isDeclLine(line, lang)) {
@@ -3083,9 +3282,10 @@
           }
           const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
           if (fn && !/^(if|for|while|switch|return|sizeof|catch)$/.test(fn[1])) {
-            if (funcs.indexOf(fn[1]) === -1) funcs.push(fn[1]);
+            if (callNames.indexOf(fn[1]) === -1) callNames.push(fn[1]);
           }
         });
+        const funcs = defNames.length >= 2 ? defNames.slice() : callNames.slice();
         const eligible = [];
         original.forEach(function (line, i) {
           if (isSpotProtectedLine(line, lang)) return;
@@ -3098,33 +3298,101 @@
           eligible[b] = tmp;
         }
         const errors = {};
-        const want = Math.max(1, Math.min(eligible.length, Math.ceil(eligible.length * 0.35)));
+        const want = Math.max(1, Math.min(eligible.length + 2, Math.ceil(Math.max(eligible.length, 1) * 0.35)));
+        const swappedFuncs = {};
 
         function acceptMutation(i, nextLine, meta) {
           if (nextLine === lines[i]) return false;
-          if (spotLineExistsElsewhere(nextLine, original, i)) return false;
+          if (spotLineExistsElsewhere(nextLine, lines, i)) return false;
           lines[i] = nextLine;
           errors[i] = meta;
           return true;
         }
 
-        eligible.forEach(function (i) {
-          if (Object.keys(errors).length >= want) return;
-          let line = lines[i];
-          let done = false;
-          const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
-          if (usedVars.length && vars.length >= 2) {
-            const from = usedVars[Math.floor(Math.random() * usedVars.length)];
-            const others = vars.filter(function (v) { return v !== from; });
-            if (others.length) {
-              const to = others[Math.floor(Math.random() * others.length)];
-              const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
-              if (acceptMutation(i, nextLine, { type: "ident", from: from, to: to })) done = true;
+        function lineRange(i) {
+          for (let r = 0; r < ranges.length; r += 1) {
+            if (i >= ranges[r].start && i <= ranges[r].end) return ranges[r];
+          }
+          return null;
+        }
+
+        // 1) preprocessor rename (stdio.h -> stdbool.h)
+        const includeIdx = [];
+        original.forEach(function (line, i) {
+          if (mutateIncludeLine(line)) includeIdx.push(i);
+        });
+        for (let a = includeIdx.length - 1; a > 0; a -= 1) {
+          const b = Math.floor(Math.random() * (a + 1));
+          const tmp = includeIdx[a];
+          includeIdx[a] = includeIdx[b];
+          includeIdx[b] = tmp;
+        }
+        if (includeIdx.length && Object.keys(errors).length < want) {
+          const i = includeIdx[0];
+          const nextLine = mutateIncludeLine(original[i]);
+          if (nextLine) acceptMutation(i, nextLine, { type: "include" });
+        }
+
+        // 2) swap two function definition names (bodies stay for inference)
+        if (ranges.length >= 2 && Object.keys(errors).length < want) {
+          const order = ranges.slice();
+          for (let a = order.length - 1; a > 0; a -= 1) {
+            const b = Math.floor(Math.random() * (a + 1));
+            const tmp = order[a];
+            order[a] = order[b];
+            order[b] = tmp;
+          }
+          const left = order[0];
+          const right = order[1];
+          if (left.name !== right.name && !errors[left.start] && !errors[right.start]) {
+            const leftNext = original[left.start].replace(new RegExp("\\b" + left.name + "\\b"), right.name);
+            const rightNext = original[right.start].replace(new RegExp("\\b" + right.name + "\\b"), left.name);
+            if (leftNext !== original[left.start] && rightNext !== original[right.start]) {
+              lines[left.start] = leftNext;
+              lines[right.start] = rightNext;
+              errors[left.start] = { type: "funcswap", from: left.name, to: right.name };
+              errors[right.start] = { type: "funcswap", from: right.name, to: left.name };
+              swappedFuncs[left.name] = true;
+              swappedFuncs[right.name] = true;
             }
           }
+        }
+
+        eligible.forEach(function (i) {
+          if (Object.keys(errors).length >= want) return;
+          if (errors[i]) return;
+          let line = lines[i];
+          let done = false;
+          const range = lineRange(i);
+
+          // return value changes
+          if (/^\s*return\b/.test(line)) {
+            const nextLine = mutateReturnLine(line);
+            if (nextLine && acceptMutation(i, nextLine, { type: "return" })) done = true;
+          }
+
+          // keep most of a swapped function body intact
+          if (!done && range && swappedFuncs[range.name] && range.body.indexOf(i) >= 0) {
+            return;
+          }
+
+          if (!done) {
+            const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
+            if (usedVars.length && vars.length >= 2) {
+              const from = usedVars[Math.floor(Math.random() * usedVars.length)];
+              const others = vars.filter(function (v) { return v !== from; });
+              if (others.length) {
+                const to = others[Math.floor(Math.random() * others.length)];
+                const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
+                if (acceptMutation(i, nextLine, { type: "ident", from: from, to: to })) done = true;
+              }
+            }
+          }
+
           if (!done && funcs.length >= 2) {
             const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
-            if (fn && funcs.indexOf(fn[1]) !== -1) {
+            const isDef = range && range.start === i;
+            if (!isDef && fn && funcs.indexOf(fn[1]) !== -1) {
               const others = funcs.filter(function (v) { return v !== fn[1]; });
               if (others.length) {
                 const to = others[Math.floor(Math.random() * others.length)];
@@ -3133,21 +3401,30 @@
               }
             }
           }
+
           if (!done && line.indexOf(";") !== -1) {
             const nextLine = line.replace(";", "");
             acceptMutation(i, nextLine, { type: "semi" });
           }
         });
+
         Object.keys(errors).forEach(function (key) {
           const i = Number(key);
           if (lines[i] === original[i]) delete errors[i];
         });
-        if (!Object.keys(errors).length && eligible.length) {
-          for (let e = 0; e < eligible.length; e += 1) {
-            const i = eligible[e];
-            if (original[i].indexOf(";") === -1) continue;
-            const nextLine = original[i].replace(";", "");
-            if (acceptMutation(i, nextLine, { type: "semi" })) break;
+        enforceSpotBodyHints(original, lines, errors, ranges);
+        if (!Object.keys(errors).length) {
+          for (let e = 0; e < original.length; e += 1) {
+            const nextInclude = mutateIncludeLine(original[e]);
+            if (nextInclude && acceptMutation(e, nextInclude, { type: "include" })) break;
+            if (/^\s*return\b/.test(original[e])) {
+              const nextRet = mutateReturnLine(original[e]);
+              if (nextRet && acceptMutation(e, nextRet, { type: "return" })) break;
+            }
+            if (!isSpotProtectedLine(original[e], lang) && original[e].indexOf(";") !== -1) {
+              const nextSemi = original[e].replace(";", "");
+              if (acceptMutation(e, nextSemi, { type: "semi" })) break;
+            }
           }
         }
         return { lines: lines, original: original, errors: errors };
@@ -3232,6 +3509,23 @@
         return d.getMonth() + 1 + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
       }
 
+      function openMyPage() {
+        if (state.play) exitGame({ keepBoard: false });
+        renderMyPage();
+        const view = document.getElementById("mypageView");
+        if (view) view.hidden = false;
+        document.body.classList.add("view-mypage");
+        updateCatcherLayer();
+      }
+
+      function closeMyPage() {
+        document.body.classList.remove("view-mypage");
+        const view = document.getElementById("mypageView");
+        if (view) view.hidden = true;
+        updateCatcherLayer();
+        focusPracticeInput();
+      }
+
       function renderMyPage() {
         const body = document.getElementById("mypageBody");
         if (!body) return;
@@ -3243,9 +3537,14 @@
             let meta = "";
             if (kind === "practice") meta = "WPM " + (r.wpm || 0) + " · " + (r.acc || 0) + "%";
             else if (r.type === "game_recite") meta = (r.durationSec || 0) + "초 · 오타 " + (r.errors || 0);
-            else meta = (r.result === "out" ? "OUT" : "CLEAR") + " · " + (r.durationSec || 0) + "초";
+            else {
+              const tag = r.result === "out"
+                ? '<span class="result-out">OUT</span>'
+                : '<span class="result-clear">CLEAR</span>';
+              meta = tag + " · " + (r.durationSec || 0) + "초";
+            }
             return '<div class="record-row"><div><b>' + esc(r.title || "코드") + '</b><span> · ' +
-              formatWhen(r.at) + "</span></div><span>" + esc(meta) + "</span></div>";
+              formatWhen(r.at) + "</span></div><span>" + meta + "</span></div>";
           }).join("") + "</div>";
         }
         const byCode = {};
@@ -3842,10 +4141,10 @@
         if (!el.kbCatcher) return;
         const off = state.finished || state.mode === 4 || state.inputLocked ||
           (state.play && state.play.kind === "spot") ||
+          document.body.classList.contains("view-mypage") ||
           el.overlay.classList.contains("show") ||
           document.getElementById("gamePickOverlay").classList.contains("show") ||
-          document.getElementById("gameRangeOverlay").classList.contains("show") ||
-          document.getElementById("mypageOverlay").classList.contains("show");
+          document.getElementById("gameRangeOverlay").classList.contains("show");
         el.kbCatcher.style.pointerEvents = off ? "none" : "auto";
       }
 
@@ -3863,7 +4162,7 @@
 
       function focusPracticeInput() {
         if (state.inputLocked || (state.play && state.play.kind === "spot")) return;
-        if (state.finished || el.overlay.classList.contains("show")) return;
+        if (state.finished || el.overlay.classList.contains("show") || document.body.classList.contains("view-mypage")) return;
         updateCatcherLayer();
         if (state.mode === 4) {
           const field = document.getElementById("m3field");
@@ -3942,8 +4241,8 @@
             closeOverlay("gameRangeOverlay");
             return;
           }
-          if (document.getElementById("mypageOverlay").classList.contains("show")) {
-            closeOverlay("mypageOverlay");
+          if (document.body.classList.contains("view-mypage")) {
+            closeMyPage();
             return;
           }
           if (state.play) return;
@@ -3952,6 +4251,7 @@
           return;
         }
 
+        if (document.body.classList.contains("view-mypage")) return;
         if (el.overlay.classList.contains("show")) return;
 
         if (e.key === "F2") {
@@ -4141,10 +4441,8 @@
           openOverlay("gameRangeOverlay");
         });
       });
-      document.getElementById("mypageOpenBtn").addEventListener("click", function () {
-        renderMyPage();
-        openOverlay("mypageOverlay");
-      });
+      document.getElementById("mypageOpenBtn").addEventListener("click", openMyPage);
+      document.getElementById("mypageBackBtn").addEventListener("click", closeMyPage);
       document.getElementById("gameRangeClose").addEventListener("click", function () {
         closeOverlay("gameRangeOverlay");
       });
@@ -4154,6 +4452,12 @@
       document.getElementById("gameRangeOverlay").addEventListener("click", function (e) {
         if (e.target.id === "gameRangeOverlay") closeOverlay("gameRangeOverlay");
       });
+      document.getElementById("gameRangeList").addEventListener("click", function (e) {
+        const btn = e.target.closest(".range-select-all");
+        if (!btn) return;
+        e.preventDefault();
+        toggleRangeGroup(btn.getAttribute("data-group"));
+      });
       document.getElementById("gameRangeStart").addEventListener("click", function () {
         const list = selectedRangeSnippets();
         if (!list.length) {
@@ -4162,12 +4466,6 @@
         }
         const pick = list[Math.floor(Math.random() * list.length)];
         beginGamePlay(pendingGameKind, pick, list);
-      });
-      document.getElementById("mypageClose").addEventListener("click", function () {
-        closeOverlay("mypageOverlay");
-      });
-      document.getElementById("mypageOverlay").addEventListener("click", function (e) {
-        if (e.target.id === "mypageOverlay") closeOverlay("mypageOverlay");
       });
       document.getElementById("gameGiveUpBtn").addEventListener("click", giveUpGame);
       el.board.addEventListener("click", function (e) {
@@ -4196,9 +4494,20 @@
         }
         restart();
       });
+      document.getElementById("finishPracticeBtn").addEventListener("click", function () {
+        if (state.play) {
+          exitGame();
+          return;
+        }
+        el.finish.classList.remove("show");
+        state.finished = false;
+        updateCatcherLayer();
+        focusPracticeInput();
+      });
       document.getElementById("finishEditBtn").addEventListener("click", function () {
         if (state.play) {
           exitGame();
+          openModal(false);
           return;
         }
         openModal(false);

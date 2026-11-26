@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -57,11 +57,15 @@ function loadLogic() {
     extractFunction(html, "identsIn"),
     extractFunction(html, "isSpotProtectedLine"),
     extractFunction(html, "spotLineExistsElsewhere"),
+    extractFunction(html, "findFunctionRanges"),
+    extractFunction(html, "mutateReturnLine"),
+    extractFunction(html, "mutateIncludeLine"),
+    extractFunction(html, "enforceSpotBodyHints"),
     extractFunction(html, "mutateForSpot")
   ].join("\n");
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, mutateForSpot };"
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, enforceSpotBodyHints, mutateForSpot };"
   );
   return factory(KEYWORDS);
 }
@@ -75,20 +79,34 @@ test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /data-game="spot"/);
   assert.doesNotMatch(html, /data-game="mypage"/);
   assert.match(html, /id="mypageOpenBtn"/);
+  assert.match(html, /id="mypageView"/);
+  assert.match(html, /id="mypageBackBtn"/);
+  assert.match(html, /id="finishPracticeBtn"/);
   assert.match(html, /id="countdown"/);
   assert.match(html, /id="gameGiveUpBtn"/);
   assert.match(html, /id="gameTimer"/);
   assert.match(html, /id="gameTitleHud"/);
   assert.match(html, /id="gameLeft"/);
+  assert.doesNotMatch(html, /id="mypageOverlay"/);
 });
 
 test("range list checks user snippets and leaves presets unchecked", () => {
   const fn = extractFunction(html, "renderGameRangeList");
   assert.match(fn, /내 코드/);
   assert.match(fn, /기본 코드/);
+  assert.match(fn, /range-select-all/);
   assert.match(fn, /packs\.mine[\s\S]*checkbox" checked/);
   assert.match(fn, /packs\.presets[\s\S]*checkbox" data-id=/);
   assert.doesNotMatch(fn.split("packs.presets")[1], /checkbox" checked/);
+});
+
+test("records persist locally even when logged in", () => {
+  const saveFn = extractFunction(html, "saveRecord");
+  assert.match(saveFn, /persistRecords\(\)/);
+  assert.match(extractFunction(html, "persistRecords"), /localStorage\.setItem\(RECORDS_KEY/);
+  assert.doesNotMatch(extractFunction(html, "persistRecords"), /if \(state\.user\) return/);
+  assert.match(html, /result-clear/);
+  assert.match(html, /result-out/);
 });
 
 test("countdown uses 3-2-1 then a 1s title hold before unlock", () => {
@@ -142,6 +160,13 @@ test("typedef and declaration lines are protected", () => {
   assert.equal(logic.isDeclLine("apple = banana;", "python"), true);
 });
 
+test("include and return mutators work", () => {
+  assert.equal(logic.mutateIncludeLine("#include <stdio.h>"), "#include <stdbool.h>");
+  assert.equal(logic.mutateIncludeLine("#include <stdbool.h>"), "#include <stdio.h>");
+  assert.equal(logic.mutateReturnLine("    return 0;"), "    return 1;");
+  assert.equal(logic.mutateReturnLine("    return NULL;"), "    return 0;");
+});
+
 test("spot mutations never rewrite protected lines or invent identifier typos", () => {
   const src = [
     "typedef int Element;",
@@ -173,7 +198,7 @@ test("spot mutations never rewrite protected lines or invent identifier typos", 
     Object.keys(errors).forEach(function (key) {
       const i = Number(key);
       const err = errors[i];
-      if (err.type === "ident" || err.type === "func") {
+      if (err.type === "ident" || err.type === "func" || err.type === "funcswap") {
         assert.notEqual(err.from, err.to);
         assert.equal(err.from.toLowerCase() === err.to.toLowerCase() && err.from !== err.to, false, "no case-only typo");
         assert.match(src, new RegExp("\\b" + err.to + "\\b"), "replacement must already exist");
@@ -183,12 +208,22 @@ test("spot mutations never rewrite protected lines or invent identifier typos", 
         assert.match(orig[i], /;/);
         assert.equal(next[i].includes(";"), false);
       }
+      if (err.type === "include") {
+        assert.match(orig[i], /#\s*include/);
+        assert.notEqual(orig[i], next[i]);
+      }
+      if (err.type === "return") {
+        assert.match(orig[i], /\breturn\b/);
+        assert.match(next[i], /\breturn\b/);
+        assert.notEqual(orig[i], next[i]);
+      }
     });
   }
 });
 
 test("spot mutation always yields at least one real changed line", () => {
   const src = [
+    "#include <stdio.h>",
     "typedef int Element;",
     "int apple;",
     "int banana;",
@@ -229,20 +264,22 @@ test("spot allows at most one error per line", () => {
   });
 });
 
-test("spot errors always differ and never camouflage as another original line", () => {
+test("spot errors always differ and non-swap mutations do not camouflage", () => {
   const src = [
+    "#include <stdio.h>",
     "typedef int Element;",
     "int apple;",
     "int banana;",
-    "void push(int x);",
-    "void pop(int x);",
-    "void ClearStack(Stack* p);",
-    "void DestroyStack(Stack* p);",
-    "apple = banana;",
+    "void push(int x) {",
+    "    apple = 1;",
+    "    return apple;",
+    "}",
+    "void pop(int x) {",
+    "    banana = 2;",
+    "    return banana;",
+    "}",
     "push(apple);",
-    "pop(banana);",
-    "ClearStack(0);",
-    "DestroyStack(0);"
+    "pop(banana);"
   ].join("\n");
 
   for (let n = 0; n < 80; n += 1) {
@@ -255,11 +292,40 @@ test("spot errors always differ and never camouflage as another original line", 
     assert.deepEqual(changed, errKeys);
     errKeys.forEach(function (i) {
       assert.notEqual(out.lines[i], out.original[i]);
+      const err = out.errors[i];
+      if (err.type === "funcswap") return;
       assert.equal(
-        out.original.some(function (line, j) { return j !== i && line === out.lines[i]; }),
+        out.lines.some(function (line, j) { return j !== i && line === out.lines[i]; }),
         false,
-        "mutated line must not duplicate another original line"
+        "mutated line must not duplicate another current line"
       );
+    });
+  }
+});
+
+test("swapped function bodies keep enough original lines to infer", () => {
+  const src = [
+    "void ClearStack(Stack* p) {",
+    "    p->top = -1;",
+    "    p->count = 0;",
+    "    return;",
+    "}",
+    "void DestroyStack(Stack* p) {",
+    "    free(p->stack);",
+    "    free(p);",
+    "    return;",
+    "}"
+  ].join("\n");
+
+  for (let n = 0; n < 40; n += 1) {
+    const out = logic.mutateForSpot(src, "c");
+    const ranges = logic.findFunctionRanges(out.original);
+    ranges.forEach(function (range) {
+      if (range.body.length < 2) return;
+      const intact = range.body.filter(function (i) {
+        return out.lines[i] === out.original[i];
+      }).length;
+      assert.ok(intact >= 1, "at least one body line must stay intact");
     });
   }
 });
