@@ -151,6 +151,8 @@ test("cloud sync keeps my codes and meta stats across devices", () => {
   assert.match(extractFunction(html, "persistKeyStats"), /writeKeyStatsCloud|keyStatsCloudTimer/);
   assert.match(extractFunction(html, "keyStatEntries"), /localeCompare/);
   assert.match(extractFunction(html, "renderTrendLineChart"), /origin:\s*true/);
+  assert.match(extractFunction(html, "renderTrendLineChart"), /preserveAspectRatio="none"/);
+  assert.match(extractFunction(html, "renderTrendLineChart"), /padL\s*=\s*0/);
   assert.match(html, /mypage-chart-wrap\.fill[\s\S]*flex:\s*1\s+1\s+0\s*!important/);
 });
 

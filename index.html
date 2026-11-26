@@ -1112,7 +1112,7 @@
       position: relative;
       height: 200px;
       min-height: 200px;
-      padding: 8px 4px 0;
+      padding: 0;
       box-sizing: border-box;
     }
     .mypage-line-wrap svg {
@@ -4898,14 +4898,15 @@
         if (!points.length) return '<p class="note">날짜별 기록이 없습니다.</p>';
         const w = 600;
         const h = 168;
-        const padL = 8;
-        const padR = 8;
-        const padT = 16;
-        const padB = 10;
+        // Flush to the bottom-left corner; only keep a tiny right/top inset for the end dot.
+        const padL = 0;
+        const padR = 6;
+        const padT = 12;
+        const padB = 0;
         const max = Math.max(1, Math.max.apply(null, points.map(function (p) { return p.value; })));
         const innerW = w - padL - padR;
         const innerH = h - padT - padB;
-        // Always start from (0,0) so the trend rises from the origin.
+        // Start exactly at the left-bottom corner (0,0), then connect real daily points.
         const plot = [{ day: "", value: 0, n: 0, origin: true }].concat(points);
         const coords = plot.map(function (p, i) {
           const x = plot.length === 1
@@ -4929,7 +4930,8 @@
         }
         axis += "</div>";
         return '<div class="mypage-line-wrap"><div class="mypage-line-tip" hidden></div>' +
-          '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet">' +
+          '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none">' +
+          '<line x1="0" y1="' + h + '" x2="' + w + '" y2="' + h + '" stroke="var(--sub-alt)" stroke-width="1"></line>' +
           '<polyline class="line-path" points="' + poly + '"></polyline>' + dots +
           "</svg>" + axis + "</div>";
       }
