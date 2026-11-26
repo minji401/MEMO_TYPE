@@ -1043,6 +1043,42 @@
       color: var(--sub);
       white-space: nowrap;
     }
+    .mypage-chart-wrap { padding-top: 12px; }
+    .mypage-chart-labels {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .mypage-chart-labels span {
+      flex: 1;
+      min-width: 10px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--sub);
+      line-height: 1.3;
+      word-break: keep-all;
+    }
+    .mypage-key-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px 14px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+    }
+    .mypage-key-grid .item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 8px;
+      background: var(--bg-soft);
+      border-radius: 6px;
+    }
+    .mypage-key-grid .ch {
+      color: var(--caret);
+      font-weight: 600;
+      min-width: 1.5ch;
+    }
+    .mypage-key-grid .val { color: var(--text); }
     .mypage-table {
       width: 100%;
       border-collapse: collapse;
@@ -1235,6 +1271,7 @@
           <div class="finish-actions">
             <button type="button" class="btn primary" id="againBtn">다시 하기</button>
             <button type="button" class="btn" id="finishPracticeBtn">연습하기</button>
+            <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
           </div>
         </div>
       </div>
@@ -1392,6 +1429,7 @@
       const STORAGE_KEY = "memotype_state_v5";
       const SNIPPETS_KEY = "typing_snippets";
       const RECORDS_KEY = "memotype_records_v1";
+      const KEY_STATS_KEY = "memotype_keystats_v1";
 
       const KEYWORDS = {
         c: new Set([
@@ -2037,7 +2075,10 @@
         play: null,
         inputLocked: false,
         records: [],
-        unsubRecords: null
+        unsubRecords: null,
+        keyStats: {},
+        lastKeyAt: null,
+        mypageTab: "speed"
       };
       let countdownTimers = [];
 
@@ -2958,6 +2999,7 @@
           state.index = skipIndent(0);
         }
         state.typedBuffer = "";
+        state.lastKeyAt = null;
         if (el.kbCatcher) el.kbCatcher.value = "";
         saveSettings();
         render();
@@ -2968,6 +3010,7 @@
       function startClock() {
         if (!state.startedAt && !state.finished) {
           state.startedAt = Date.now();
+          state.lastKeyAt = null;
         }
       }
 
@@ -3007,6 +3050,18 @@
         el.statErr.textContent = String(state.keyWrong);
       }
 
+      function setFinishActions(kind) {
+        const practiceBtn = document.getElementById("finishPracticeBtn");
+        const editBtn = document.getElementById("finishEditBtn");
+        if (kind === "game") {
+          if (practiceBtn) practiceBtn.hidden = false;
+          if (editBtn) editBtn.hidden = true;
+        } else {
+          if (practiceBtn) practiceBtn.hidden = true;
+          if (editBtn) editBtn.hidden = false;
+        }
+      }
+
       function setFinishStats(kind, values) {
         const l1 = document.getElementById("finLabel1");
         const l2 = document.getElementById("finLabel2");
@@ -3019,6 +3074,7 @@
           el.finWpm.textContent = String(values.time || 0);
           el.finAcc.textContent = String(values.misses || 0);
           el.finErr.textContent = "";
+          setFinishActions("game");
         } else {
           if (l1) l1.textContent = "WPM";
           if (l2) l2.textContent = "정확도";
@@ -3027,6 +3083,7 @@
           el.finWpm.textContent = String(values.wpm || 0);
           el.finAcc.textContent = (values.acc || 0) + "%";
           el.finErr.textContent = String(values.errors || 0);
+          setFinishActions("practice");
         }
       }
 
@@ -3065,6 +3122,114 @@
 
       function loadRecords() {
         state.records = readLocalRecords();
+      }
+
+      function isTrackableKey(ch) {
+        if (!ch || ch.length !== 1) return false;
+        if (ch >= "0" && ch <= "9") return false;
+        if (/\s/.test(ch)) return false;
+        if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(ch)) return false;
+        return true;
+      }
+
+      function fingerForChar(ch) {
+        const map = {
+          "`": "좌-소지", "~": "좌-소지", "q": "좌-소지", "Q": "좌-소지", "a": "좌-소지", "A": "좌-소지", "z": "좌-소지", "Z": "좌-소지",
+          "w": "좌-약지", "W": "좌-약지", "s": "좌-약지", "S": "좌-약지", "x": "좌-약지", "X": "좌-약지",
+          "e": "좌-중지", "E": "좌-중지", "d": "좌-중지", "D": "좌-중지", "c": "좌-중지", "C": "좌-중지",
+          "r": "좌-검지", "R": "좌-검지", "t": "좌-검지", "T": "좌-검지", "f": "좌-검지", "F": "좌-검지",
+          "g": "좌-검지", "G": "좌-검지", "v": "좌-검지", "V": "좌-검지", "b": "좌-검지", "B": "좌-검지",
+          "y": "우-검지", "Y": "우-검지", "u": "우-검지", "U": "우-검지", "h": "우-검지", "H": "우-검지",
+          "j": "우-검지", "J": "우-검지", "n": "우-검지", "N": "우-검지", "m": "우-검지", "M": "우-검지",
+          "i": "우-중지", "I": "우-중지", "k": "우-중지", "K": "우-중지", ",": "우-중지", "<": "우-중지",
+          "o": "우-약지", "O": "우-약지", "l": "우-약지", "L": "우-약지", ".": "우-약지", ">": "우-약지",
+          "p": "우-소지", "P": "우-소지", "-": "우-소지", "_": "우-소지", "=": "우-소지", "+": "우-소지",
+          "[": "우-소지", "{": "우-소지", "]": "우-소지", "}": "우-소지", "\\": "우-소지", "|": "우-소지",
+          ";": "우-소지", ":": "우-소지", "'": "우-소지", "\"": "우-소지", "/": "우-소지", "?": "우-소지",
+          "!": "좌-소지", "@": "좌-약지", "#": "좌-중지", "$": "좌-검지", "%": "좌-검지",
+          "^": "우-검지", "&": "우-검지", "*": "우-중지", "(": "우-약지", ")": "우-소지"
+        };
+        return map[ch] || null;
+      }
+
+      function loadKeyStats() {
+        try {
+          const saved = localStorage.getItem(KEY_STATS_KEY);
+          const parsed = saved ? JSON.parse(saved) : {};
+          state.keyStats = parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+          state.keyStats = {};
+        }
+      }
+
+      function persistKeyStats() {
+        try {
+          localStorage.setItem(KEY_STATS_KEY, JSON.stringify(state.keyStats));
+        } catch (e) {}
+      }
+
+      function recordKeyStat(ch, ok) {
+        if (!isTrackableKey(ch)) return;
+        if (!state.keyStats[ch]) {
+          state.keyStats[ch] = { hits: 0, correct: 0, wrong: 0, totalMs: 0, timedHits: 0 };
+        }
+        const row = state.keyStats[ch];
+        const now = Date.now();
+        const dt = state.lastKeyAt ? Math.min(2000, Math.max(50, now - state.lastKeyAt)) : 200;
+        state.lastKeyAt = now;
+        row.hits += 1;
+        if (ok) {
+          row.correct += 1;
+          row.totalMs += dt;
+          row.timedHits += 1;
+        } else {
+          row.wrong += 1;
+        }
+        persistKeyStats();
+      }
+
+      function keyStatEntries() {
+        return Object.keys(state.keyStats || {}).filter(function (ch) {
+          return isTrackableKey(ch) && (state.keyStats[ch].hits || 0) > 0;
+        }).sort(function (a, b) {
+          return (state.keyStats[b].hits || 0) - (state.keyStats[a].hits || 0);
+        });
+      }
+
+      function keyDisplay(ch) {
+        if (ch === " ") return "Space";
+        return ch;
+      }
+
+      function keyAccuracy(ch) {
+        const row = state.keyStats[ch];
+        if (!row || !row.hits) return 0;
+        return Math.round((row.correct / row.hits) * 1000) / 10;
+      }
+
+      function keySpeed(ch) {
+        const row = state.keyStats[ch];
+        if (!row || !row.timedHits || !row.totalMs) return 0;
+        const avgMs = row.totalMs / row.timedHits;
+        return Math.round(60000 / avgMs);
+      }
+
+      function fingerSpeedEntries() {
+        const order = ["좌-소지", "좌-약지", "좌-중지", "좌-검지", "우-검지", "우-중지", "우-약지", "우-소지"];
+        const buckets = {};
+        order.forEach(function (f) { buckets[f] = { totalMs: 0, timedHits: 0 }; });
+        keyStatEntries().forEach(function (ch) {
+          const finger = fingerForChar(ch);
+          if (!finger || !buckets[finger]) return;
+          const row = state.keyStats[ch];
+          buckets[finger].totalMs += row.totalMs || 0;
+          buckets[finger].timedHits += row.timedHits || 0;
+        });
+        return order.map(function (f) {
+          const b = buckets[f];
+          const value = b.timedHits ? Math.round(60000 / (b.totalMs / b.timedHits)) : 0;
+          return { label: f, value: value };
+        });
       }
 
       function readLocalRecords() {
@@ -3919,17 +4084,30 @@
           if (lines[i] === original[i]) delete errors[i];
         });
         enforceSpotBodyHints(original, lines, errors, ranges);
+        Object.keys(errors).forEach(function (key) {
+          const i = Number(key);
+          const err = errors[i];
+          if (!err || err.type === "funcswap" || err.type === "insert" || err.type === "rettype") return;
+          if (lines[i] === original[i] || spotLineExistsElsewhere(lines[i], lines, i)) {
+            lines[i] = original[i];
+            delete errors[i];
+          }
+        });
 
         // insert unnecessary lines at end (never delete / never shift earlier lines)
         if (Object.keys(errors).length < want) {
           const junkPool = [
             "    printf(\"debug\");",
             "    puts(\"x\");",
-            "    return;"
+            "    /* spot junk */;"
           ];
-          const junk = junkPool[Math.floor(Math.random() * junkPool.length)];
-          lines.push(junk);
-          errors[lines.length - 1] = { type: "insert" };
+          for (let j = 0; j < junkPool.length; j += 1) {
+            const junk = junkPool[j];
+            if (spotLineExistsElsewhere(junk, lines, -1)) continue;
+            lines.push(junk);
+            errors[lines.length - 1] = { type: "insert" };
+            break;
+          }
         }
 
         if (!Object.keys(errors).length) {
@@ -4050,13 +4228,27 @@
         return Math.round(sum / list.length);
       }
 
-      function renderMyPageChart(values, unit) {
+      function renderMyPageChart(values, unit, withLabels) {
         if (!values.length) return '<p class="note">아직 데이터가 없습니다.</p>';
         const max = Math.max(1, Math.max.apply(null, values.map(function (v) { return v.value; })));
-        return '<div class="mypage-chart">' + values.map(function (v) {
+        const bars = '<div class="mypage-chart">' + values.map(function (v) {
           const h = Math.max(4, Math.round((v.value / max) * 160));
           return '<div class="bar" style="height:' + h + 'px" title="' + esc(v.label) + ": " + v.value + unit +
             '"><span>' + v.value + "</span></div>";
+        }).join("") + "</div>";
+        if (!withLabels) return bars;
+        return '<div class="mypage-chart-wrap">' + bars +
+          '<div class="mypage-chart-labels">' + values.map(function (v) {
+            return "<span>" + esc(v.label) + "</span>";
+          }).join("") + "</div></div>";
+      }
+
+      function renderKeyStatGrid(formatter) {
+        const keys = keyStatEntries();
+        if (!keys.length) return '<p class="note">연습하면서 친 영어·기호 글자가 여기에 쌓입니다.</p>';
+        return '<div class="mypage-key-grid">' + keys.map(function (ch) {
+          return '<div class="item"><span class="ch">' + esc(keyDisplay(ch)) +
+            '</span><span class="val">' + formatter(ch) + "</span></div>";
         }).join("") + "</div>";
       }
 
@@ -4111,6 +4303,22 @@
           return "<h3 style='margin-bottom:12px;color:var(--caret)'>틀린 부분 찾기</h3>" +
             renderMyPageTable(rows, ["코드", "시각", "결과", "시간", "오답"]);
         }
+        if (tab === "keyHits") {
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>글쇠별 타수</h3>" +
+            renderKeyStatGrid(function (ch) { return (state.keyStats[ch].hits || 0) + "타"; });
+        }
+        if (tab === "keyAcc") {
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>글쇠별 정확도</h3>" +
+            renderKeyStatGrid(function (ch) { return keyAccuracy(ch) + "%"; });
+        }
+        if (tab === "keySpeed") {
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>글쇠별 속도</h3>" +
+            renderKeyStatGrid(function (ch) { return keySpeed(ch) + "타"; });
+        }
+        if (tab === "finger") {
+          return "<h3 style='margin-bottom:12px;color:var(--caret)'>손가락 빠르기</h3>" +
+            renderMyPageChart(fingerSpeedEntries(), "타", true);
+        }
         const byCode = {};
         practice.forEach(function (r) {
           const key = r.snippetId || r.title || "기타";
@@ -4140,7 +4348,11 @@
           { id: "practice", label: "연습기록" },
           { id: "recite", label: "백지테스트" },
           { id: "spot", label: "틀린부분찾기" },
-          { id: "trend", label: "코드별추이" }
+          { id: "trend", label: "코드별추이" },
+          { id: "keyHits", label: "글쇠별타수" },
+          { id: "keyAcc", label: "글쇠별정확도" },
+          { id: "keySpeed", label: "글쇠별속도" },
+          { id: "finger", label: "손가락빠르기" }
         ];
         body.innerHTML =
           '<div class="mypage-summary">' +
@@ -4273,9 +4485,11 @@
           if (oldFlags[p] === 0 && snap.flags[p] === 1) {
             state.keyCorrect += 1;
             lastSound = false;
+            recordKeyStat(state.source[p], true);
           } else if (oldFlags[p] === 0 && snap.flags[p] === 2) {
             state.keyWrong += 1;
             lastSound = true;
+            recordKeyStat(state.source[p], false);
           }
         }
         if (typed.length > state.typedBuffer.length) startClock();
@@ -4312,12 +4526,15 @@
         if (next.length > state.blankTyped.length) {
           const added = next.slice(state.blankTyped.length);
           for (let i = 0; i < added.length; i += 1) {
-            if (added[i] === expected[state.blankTyped.length + i]) {
+            const expectCh = expected[state.blankTyped.length + i];
+            if (added[i] === expectCh) {
               state.keyCorrect += 1;
               playClick(false);
+              recordKeyStat(expectCh, true);
             } else {
               state.keyWrong += 1;
               playClick(true);
+              recordKeyStat(expectCh || added[i], false);
             }
           }
         } else {
@@ -4616,9 +4833,11 @@
         if (e.key === expected[state.blankTyped.length]) {
           state.keyCorrect += 1;
           playClick(false);
+          recordKeyStat(e.key, true);
         } else {
           state.keyWrong += 1;
           playClick(true);
+          recordKeyStat(expected[state.blankTyped.length] || e.key, false);
         }
         state.blankTyped = next;
         if (state.blankTyped === expected) {
@@ -5112,6 +5331,14 @@
         updateCatcherLayer();
         focusPracticeInput();
       });
+      document.getElementById("finishEditBtn").addEventListener("click", function () {
+        if (state.play) {
+          exitGame();
+          openModal(false);
+          return;
+        }
+        openModal(false);
+      });
 
       el.snippetSelect.addEventListener("change", function () {
         if (!el.snippetSelect.value) return;
@@ -5273,6 +5500,7 @@
 
       loadSnippets();
       loadRecords();
+      loadKeyStats();
       loadSettings();
       renderAuthUI();
       getRedirectResult(firebaseAuth).catch(function (err) {

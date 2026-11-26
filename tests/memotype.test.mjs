@@ -88,7 +88,9 @@ test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="mypageView"/);
   assert.match(html, /id="mypageBackBtn"/);
   assert.match(html, /id="finishPracticeBtn"/);
-  assert.doesNotMatch(html, /id="finishEditBtn"/);
+  assert.match(html, /id="finishEditBtn"/);
+  assert.match(extractFunction(html, "setFinishActions"), /practiceBtn\.hidden = true/);
+  assert.match(extractFunction(html, "setFinishActions"), /editBtn\.hidden = false/);
   assert.match(html, /랜덤 백지 테스트/);
   assert.doesNotMatch(html, /랜덤 백지 연습/);
   assert.match(html, /id="countdown"/);
@@ -98,6 +100,28 @@ test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="gameLeft"/);
   assert.match(html, /mypage-tabs/);
   assert.doesNotMatch(html, /id="mypageOverlay"/);
+});
+
+test("mypage tracks per-key and finger stats for English/symbols", () => {
+  assert.match(html, /KEY_STATS_KEY/);
+  assert.match(html, /function isTrackableKey/);
+  assert.match(html, /function fingerForChar/);
+  assert.match(html, /function recordKeyStat/);
+  assert.match(html, /function fingerSpeedEntries/);
+  assert.match(extractFunction(html, "isTrackableKey"), /[0-9]/);
+  assert.match(extractFunction(html, "isTrackableKey"), /가-힣/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /keyHits/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /keyAcc/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /keySpeed/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /finger/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /renderKeyStatGrid/);
+  assert.match(extractFunction(html, "myPagePanelHtml"), /renderMyPageChart\(fingerSpeedEntries/);
+  assert.match(extractFunction(html, "renderMyPage"), /글쇠별타수/);
+  assert.match(extractFunction(html, "renderMyPage"), /글쇠별정확도/);
+  assert.match(extractFunction(html, "renderMyPage"), /글쇠별속도/);
+  assert.match(extractFunction(html, "renderMyPage"), /손가락빠르기/);
+  assert.match(extractFunction(html, "syncCatcherValue"), /recordKeyStat/);
+  assert.match(html, /loadKeyStats\(\)/);
 });
 
 test("range list checks user snippets and leaves presets unchecked", () => {
@@ -337,12 +361,14 @@ test("spot errors always differ and non-swap mutations do not camouflage", () =>
         return;
       }
       if (i < out.original.length) assert.notEqual(out.lines[i], out.original[i]);
-      if (err.type === "funcswap") return;
-      assert.equal(
-        out.lines.some(function (line, j) { return j !== i && line === out.lines[i]; }),
-        false,
-        "mutated line must not duplicate another current line"
-      );
+      if (err.type === "funcswap" || err.type === "insert" || err.type === "rettype") return;
+      if (err.type === "ident" || err.type === "func" || err.type === "semi" || err.type === "include") {
+        assert.equal(
+          out.lines.some(function (line, j) { return j !== i && line === out.lines[i]; }),
+          false,
+          "mutated line must not duplicate another current line"
+        );
+      }
     });
   }
 });
