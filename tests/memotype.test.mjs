@@ -124,6 +124,13 @@ test("mypage tracks per-key and finger stats for English/symbols", () => {
   assert.match(html, /loadKeyStats\(\)/);
 });
 
+test("practice start warns when snippet is unsaved", () => {
+  assert.match(extractFunction(html, "hasUnsavedSnippetChanges"), /creatingSnippet/);
+  assert.match(extractFunction(html, "startFromModal"), /hasUnsavedSnippetChanges/);
+  assert.match(extractFunction(html, "startFromModal"), /window\.confirm/);
+  assert.match(extractFunction(html, "startFromModal"), /저장되지 않은 코드/);
+});
+
 test("range list checks user snippets and leaves presets unchecked", () => {
   const fn = extractFunction(html, "renderGameRangeList");
   assert.match(fn, /내 코드/);

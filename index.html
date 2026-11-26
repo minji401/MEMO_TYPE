@@ -1022,14 +1022,19 @@
     .mypage-chart {
       display: flex;
       align-items: flex-end;
-      gap: 6px;
-      height: 180px;
-      padding: 8px 4px 0;
+      justify-content: flex-start;
+      gap: 10px;
+      height: 200px;
+      min-height: 200px;
+      padding: 22px 4px 0;
       border-bottom: 1px solid var(--sub-alt);
+      overflow-x: auto;
+      box-sizing: border-box;
     }
     .mypage-chart .bar {
-      flex: 1;
-      min-width: 10px;
+      flex: 0 0 32px;
+      width: 32px;
+      min-width: 32px;
       background: linear-gradient(180deg, var(--caret), #b89410);
       border-radius: 4px 4px 0 0;
       position: relative;
@@ -1043,15 +1048,20 @@
       color: var(--sub);
       white-space: nowrap;
     }
-    .mypage-chart-wrap { padding-top: 12px; }
+    .mypage-chart-wrap {
+      padding-top: 8px;
+      min-height: 236px;
+    }
     .mypage-chart-labels {
       display: flex;
-      gap: 6px;
+      justify-content: flex-start;
+      gap: 10px;
       margin-top: 8px;
+      min-height: 28px;
     }
     .mypage-chart-labels span {
-      flex: 1;
-      min-width: 10px;
+      flex: 0 0 32px;
+      width: 32px;
       text-align: center;
       font-size: 10px;
       color: var(--sub);
@@ -1081,6 +1091,7 @@
     .mypage-key-grid .val { color: var(--text); }
     .mypage-table {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
       font-size: 13px;
     }
@@ -1089,8 +1100,25 @@
       padding: 10px 8px;
       border-bottom: 1px solid var(--sub-alt);
       text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
     }
     .mypage-table th { color: var(--sub); font-weight: 500; }
+    .mypage-table col.c-code { width: 28%; }
+    .mypage-table col.c-when { width: 18%; }
+    .mypage-table col.c-mid { width: 16%; }
+    .mypage-table col.c-time { width: 18%; }
+    .mypage-table col.c-tail { width: 20%; }
+    .mypage-table td:nth-child(3),
+    .mypage-table th:nth-child(3),
+    .mypage-table td:nth-child(4),
+    .mypage-table th:nth-child(4),
+    .mypage-table td:nth-child(5),
+    .mypage-table th:nth-child(5) {
+      text-align: right;
+    }
     .record-list { display: flex; flex-direction: column; gap: 8px; }
     .record-row {
       display: flex;
@@ -4231,12 +4259,15 @@
       function renderMyPageChart(values, unit, withLabels) {
         if (!values.length) return '<p class="note">아직 데이터가 없습니다.</p>';
         const max = Math.max(1, Math.max.apply(null, values.map(function (v) { return v.value; })));
+        const plotH = 160;
         const bars = '<div class="mypage-chart">' + values.map(function (v) {
-          const h = Math.max(4, Math.round((v.value / max) * 160));
+          const h = Math.max(4, Math.round((v.value / max) * plotH));
           return '<div class="bar" style="height:' + h + 'px" title="' + esc(v.label) + ": " + v.value + unit +
             '"><span>' + v.value + "</span></div>";
         }).join("") + "</div>";
-        if (!withLabels) return bars;
+        if (!withLabels) {
+          return '<div class="mypage-chart-wrap">' + bars + "</div>";
+        }
         return '<div class="mypage-chart-wrap">' + bars +
           '<div class="mypage-chart-labels">' + values.map(function (v) {
             return "<span>" + esc(v.label) + "</span>";
@@ -4254,7 +4285,9 @@
 
       function renderMyPageTable(rows, cols) {
         if (!rows.length) return '<p class="note">아직 기록이 없습니다.</p>';
-        let html = '<table class="mypage-table"><thead><tr>';
+        let html = '<table class="mypage-table"><colgroup>' +
+          '<col class="c-code"><col class="c-when"><col class="c-mid"><col class="c-time"><col class="c-tail">' +
+          "</colgroup><thead><tr>";
         cols.forEach(function (c) { html += "<th>" + esc(c) + "</th>"; });
         html += "</tr></thead><tbody>";
         rows.forEach(function (row) {
@@ -5143,6 +5176,17 @@
         focusPracticeInput();
       }
 
+      function hasUnsavedSnippetChanges() {
+        const code = el.rawCode ? el.rawCode.value : "";
+        if (!String(code).trim()) return false;
+        if (state.creatingSnippet) return true;
+        const id = (el.modalSnippetSelect && el.modalSnippetSelect.value) || state.snippetId;
+        const current = findSnippet(id);
+        if (!current) return true;
+        if (isBuiltInSnippet(current)) return false;
+        return code !== (current.code || "");
+      }
+
       function startFromModal() {
         const raw = el.rawCode.value;
         const lang = el.modalLangSelect.value;
@@ -5150,6 +5194,10 @@
         if (!processed.trim()) {
           el.rawCode.focus();
           return;
+        }
+        if (hasUnsavedSnippetChanges()) {
+          const ok = window.confirm("아직 저장되지 않은 코드입니다. 저장하지 않고 연습을 시작할까요?");
+          if (!ok) return;
         }
         state.lang = lang;
         state.raw = raw;
