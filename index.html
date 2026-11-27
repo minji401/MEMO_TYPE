@@ -999,8 +999,11 @@
       inset: 0;
       z-index: 8;
       place-items: center;
-      background: rgba(50, 52, 55, 0.92);
+      background: var(--bg-elev);
       text-align: center;
+    }
+    body.spot-game.spot-countdown .code-scroll {
+      visibility: hidden;
     }
     .countdown.show { display: grid; }
     .countdown-num {
@@ -1073,25 +1076,19 @@
     .spot-line.found .src { background: rgba(226, 183, 20, 0.16); }
     .spot-line.miss-flash .src { background: rgba(202, 71, 84, 0.28); }
     body.spot-reviewing .spot-line { cursor: default; }
-    body.spot-reviewing .spot-line:hover .src { background: transparent; }
     .spot-line.wrong-pick .src { background: rgba(202, 71, 84, 0.22); }
     .spot-line.missed-answer .src { background: rgba(90, 168, 212, 0.22); }
-    .spot-mark {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 11px;
-      font-family: "Noto Sans KR", sans-serif;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      pointer-events: none;
-      padding: 2px 8px;
-      border-radius: 999px;
+    body.spot-reviewing .spot-line.found:hover .src,
+    body.spot-reviewing .spot-line.found .src { background: rgba(226, 183, 20, 0.16); }
+    body.spot-reviewing .spot-line.wrong-pick:hover .src,
+    body.spot-reviewing .spot-line.wrong-pick .src { background: rgba(202, 71, 84, 0.22); }
+    body.spot-reviewing .spot-line.missed-answer:hover .src,
+    body.spot-reviewing .spot-line.missed-answer .src { background: rgba(90, 168, 212, 0.22); }
+    .spot-line .fb-note {
+      color: #9fd3e8;
+      opacity: 0.95;
+      font-family: "JetBrains Mono", monospace;
     }
-    .spot-mark.found { color: #e2b714; background: rgba(226, 183, 20, 0.14); }
-    .spot-mark.wrong { color: #e06c75; background: rgba(202, 71, 84, 0.16); }
-    .spot-mark.missed { color: #7ec8e3; background: rgba(90, 168, 212, 0.16); }
     .spot-review-bar {
       display: none;
       position: absolute;
@@ -3996,6 +3993,7 @@
         countdownTimers = [];
         const box = document.getElementById("countdown");
         if (box) box.classList.remove("show");
+        document.body.classList.remove("spot-countdown");
       }
 
       function gameElapsedSec() {
@@ -4454,6 +4452,7 @@
         document.body.classList.remove("game-play");
         document.body.classList.remove("spot-game");
         document.body.classList.remove("recite-game");
+        document.body.classList.remove("spot-countdown");
         leaveSpotReview();
         el.board.style.paddingBottom = "";
         const hud = document.getElementById("gameHud");
@@ -4524,6 +4523,9 @@
         const box = document.getElementById("countdown");
         const num = document.getElementById("countdownNum");
         const cap = document.getElementById("countdownTitle");
+        if (state.play && state.play.kind === "spot") {
+          document.body.classList.add("spot-countdown");
+        }
         setInputLocked(true);
         box.classList.add("show");
         cap.classList.remove("show", "fade");
@@ -4544,6 +4546,7 @@
             countdownTimers.push(setTimeout(function () {
               box.classList.remove("show");
               cap.classList.remove("show", "fade");
+              document.body.classList.remove("spot-countdown");
               setInputLocked(false);
               if (thenFn) thenFn();
             }, 800));
@@ -4618,10 +4621,11 @@
           state.lines = src.split("\n");
           state.finished = false;
           el.finish.classList.remove("show");
-          renderSpotBoard();
+          el.board.innerHTML = "";
           updateGameHud();
           setInputLocked(true);
           startCountdown(state.play.title, function () {
+            renderSpotBoard();
             state.play.startedAt = Date.now();
             updateGameHud();
           });
@@ -4783,14 +4787,19 @@
       function isPlausibleSpotType(name) {
         if (!name) return false;
         if (/^(void|int|char|float|double|size_t|bool|Boolean|Element|Stack|Queue|TreeNode)$/.test(name)) return true;
-        return /^[A-Z][A-Za-z0-9_]*$/.test(name);
+        // Only PascalCase type-looking names (never field names like front/data).
+        return /^[A-Z][A-Za-z0-9_]*$/.test(name) && !/^(NULL|TRUE|FALSE)$/.test(name);
       }
 
       function collectSpotTypes(original, lang) {
         const kw = KEYWORDS[lang] || KEYWORDS.c;
         const types = ["void", "int", "char"];
+        const funcNames = {};
+        findFunctionRanges(original || []).forEach(function (r) {
+          if (r && r.name) funcNames[r.name] = true;
+        });
         function addType(name) {
-          if (!name || kw.has(name) || !isPlausibleSpotType(name)) return;
+          if (!name || kw.has(name) || funcNames[name] || !isPlausibleSpotType(name)) return;
           if (types.indexOf(name) === -1) types.push(name);
         }
         (original || []).forEach(function (line) {
@@ -4799,10 +4808,9 @@
           if (typedefAlias) addType(typedefAlias[1]);
           const structName = text.match(/\b(?:struct|class|enum|union)\s+([A-Za-z_]\w*)/);
           if (structName) addType(structName[1]);
-          if (isDeclLine(line, lang) || isTypedefLine(line) || /^\s*[A-Za-z_]\w*\s+[A-Za-z_]\w*\s*\(/.test(text)) {
-            const lead = text.match(/^\s*(?:(?:unsigned|signed|static|const|volatile|extern|register|struct|enum|union|class)\s+)*([A-Za-z_]\w*)/);
-            if (lead) addType(lead[1]);
-          }
+          // Closing typedef/struct alias on its own line.
+          const closeAlias = text.match(new RegExp("^\\s*" + String.fromCharCode(125) + "\\s*([A-Za-z_]\\w*)\\s*;\\s*$"));
+          if (closeAlias) addType(closeAlias[1]);
         });
         return types.filter(isPlausibleSpotType);
       }
@@ -4832,6 +4840,83 @@
         if (!t || /;\s*$/.test(t)) return null;
         if (!/^(if|for|while)\s*\(.*\)\s*$/.test(t)) return null;
         return line.replace(/\s*$/, ";");
+      }
+
+      function mutateSignLine(line) {
+        const text = String(line || "");
+        if (!text) return null;
+        // ++ <-> --
+        if (/\+\+/.test(text) || /--/.test(text)) {
+          const next = text.replace(/\+\+/g, "\0I\0").replace(/--/g, "++").replace(/\0I\0/g, "--");
+          if (next !== text) return next;
+        }
+        // += <-> -=
+        if (/\+=/.test(text) || /-=/.test(text)) {
+          const next = text.replace(/\+=/g, "\0A\0").replace(/-=/g, "+=").replace(/\0A\0/g, "-=");
+          if (next !== text) return next;
+        }
+        // Single +/- only (keep -> intact)
+        const protected = [];
+        const masked = text.replace(/->/g, function (tok) {
+          protected.push(tok);
+          return "\0P" + (protected.length - 1) + "\0";
+        });
+        if (!/[+-]/.test(masked)) return null;
+        let flipped = 0;
+        const nextMasked = masked.replace(/[+-]/g, function (ch) {
+          flipped += 1;
+          return ch === "+" ? "-" : "+";
+        });
+        if (!flipped) return null;
+        return nextMasked.replace(/\0P(\d+)\0/g, function (_, idx) {
+          return protected[Number(idx)];
+        });
+      }
+
+      function isCopyableSpotLine(line, lang) {
+        const t = String(line || "").trim();
+        const openBrace = String.fromCharCode(123);
+        const closeBrace = String.fromCharCode(125);
+        if (!t) return false;
+        if (t === openBrace || t === closeBrace) return false;
+        if (t.charAt(0) === "#") return false;
+        if (isTypedefLine(line) || isDeclLine(line, lang)) return false;
+        if (/^(if|for|while|switch|else|case|default)\b/.test(t)) return false;
+        if (lang === "python") {
+          if (/^(def|class|import|from|return)\b/.test(t)) return false;
+          if (/:$/.test(t)) return false;
+          return true;
+        }
+        // Skip function signatures / definitions (optional trailing brace).
+        const sigRe = new RegExp("^[A-Za-z_].*\\(.*\\)\\s*" + openBrace + "?\\s*$");
+        if (sigRe.test(t) && !/;\s*$/.test(t)) return false;
+        if (/^(return)\b/.test(t)) return false;
+        // Prefer real statements already in the code.
+        return /;\s*$/.test(t) || /=\s*[^=]/.test(t) || /^[A-Za-z_]\w*\s*\(.*\)\s*;\s*$/.test(t);
+      }
+
+      function spotErrorNote(err) {
+        if (!err) return "이 줄이 바뀌었습니다";
+        if (err.type === "insert") return "원래 없던 줄이 끼어 있습니다";
+        if (err.type === "semi") return "세미콜론이 빠졌습니다";
+        if (err.type === "addsemi") return "세미콜론이 잘못 붙었습니다";
+        if (err.type === "pointer") return "포인터(*) 표기가 바뀌었습니다";
+        if (err.type === "rettype") return "자료형이 바뀌었습니다";
+        if (err.type === "ident") {
+          if (err.from && err.to) return err.from + " → " + err.to;
+          return "식별자가 바뀌었습니다";
+        }
+        if (err.type === "func") {
+          if (err.from && err.to) return err.from + "() → " + err.to + "()";
+          return "함수 호출이 바뀌었습니다";
+        }
+        if (err.type === "funcswap") {
+          if (err.from && err.to) return "함수 이름: " + err.from + " ↔ " + err.to;
+          return "함수 이름이 바뀌었습니다";
+        }
+        if (err.type === "include") return "헤더 이름이 바뀌었습니다";
+        if (err.type === "sign") return "+/− 부호가 바뀌었습니다";
+        return "이 줄이 바뀌었습니다";
       }
 
       function mutateForSpot(source, lang) {
@@ -4920,7 +5005,7 @@
           let line = lines[i];
           let done = false;
           const range = lineRange(i);
-          const strategies = ["pointer", "type", "ident", "func", "semi", "addsemi"];
+          const strategies = ["pointer", "type", "ident", "func", "semi", "addsemi", "sign"];
           for (let s = strategies.length - 1; s > 0; s -= 1) {
             const r = Math.floor(Math.random() * (s + 1));
             const tmp = strategies[s];
@@ -4936,6 +5021,9 @@
             } else if (kind === "type") {
               const nextLine = mutateTypeLine(line, types);
               if (acceptMutation(i, nextLine, { type: "rettype" })) done = true;
+            } else if (kind === "sign") {
+              const nextLine = mutateSignLine(line);
+              if (acceptMutation(i, nextLine, { type: "sign" })) done = true;
             } else if (kind === "ident") {
               const usedVars = identsIn(line).filter(function (n) {
                 return vars.indexOf(n) !== -1 && !typeSet[n] && !isPlausibleSpotType(n);
@@ -4989,43 +5077,44 @@
           }
         });
 
-        // Insert an extra statement inside a function body (never after the whole file).
+        // Copy an existing normal statement into a function body (never invent printf/debug junk).
         if (Object.keys(errors).length < want) {
           const hosts = ranges.filter(function (r) {
             return r && r.body && r.body.length >= 1 && r.end > r.start;
           });
-          if (hosts.length) {
+          const donors = [];
+          lines.forEach(function (line, idx) {
+            if (!isCopyableSpotLine(line, lang)) return;
+            if (errors[idx]) return;
+            donors.push(idx);
+          });
+          if (hosts.length && donors.length) {
             const host = hosts[Math.floor(Math.random() * hosts.length)];
+            const donorIdx = donors[Math.floor(Math.random() * donors.length)];
             const insertAt = host.end;
             let indent = "    ";
             const sample = lines[host.body[host.body.length - 1]] || "";
             const lead = String(sample).match(/^\s*/);
             if (lead && lead[0]) indent = lead[0];
-            const junkPool = lang === "python"
-              ? [indent + "print(\"debug\")", indent + "x = x  # spot"]
-              : [indent + "printf(\"debug\");", indent + "puts(\"x\");", indent + "/* spot junk */;"];
-            for (let j = 0; j < junkPool.length; j += 1) {
-              const junk = junkPool[j];
-              if (spotLineExistsElsewhere(junk, lines, -1)) continue;
-              // insertAt is the closing "}" line — splice keeps junk inside the body.
-              const shifted = {};
-              Object.keys(errors).forEach(function (key) {
-                const idx = Number(key);
-                shifted[idx >= insertAt ? idx + 1 : idx] = errors[key];
-              });
-              Object.keys(errors).forEach(function (key) { delete errors[key]; });
-              Object.keys(shifted).forEach(function (key) { errors[key] = shifted[key]; });
-              lines.splice(insertAt, 0, junk);
-              original.splice(insertAt, 0, "");
-              errors[insertAt] = { type: "insert" };
-              break;
-            }
+            const donorTrim = String(lines[donorIdx] || "").replace(/^\s+/, "");
+            const copied = indent + donorTrim;
+            const shifted = {};
+            Object.keys(errors).forEach(function (key) {
+              const idx = Number(key);
+              shifted[idx >= insertAt ? idx + 1 : idx] = errors[key];
+            });
+            Object.keys(errors).forEach(function (key) { delete errors[key]; });
+            Object.keys(shifted).forEach(function (key) { errors[key] = shifted[key]; });
+            lines.splice(insertAt, 0, copied);
+            original.splice(insertAt, 0, "");
+            errors[insertAt] = { type: "insert" };
           }
         }
 
         if (!Object.keys(errors).length) {
           for (let e = 0; e < original.length; e += 1) {
             if (acceptMutation(e, mutateIncludeLine(original[e]), { type: "include" })) break;
+            if (acceptMutation(e, mutateSignLine(original[e]), { type: "sign" })) break;
             if (acceptMutation(e, mutatePointerLine(original[e]), { type: "pointer" })) break;
             if (acceptMutation(e, mutateAddSemi(original[e]), { type: "addsemi" })) break;
             if (!isSpotProtectedLine(original[e], lang) && original[e].indexOf(";") !== -1) {
@@ -5043,23 +5132,21 @@
         let html = '<div class="code">';
         play.displayLines.forEach(function (line, i) {
           let cls = "line spot-line";
-          let mark = "";
+          let note = "";
           if (reviewing) {
             if (play.found[i]) {
               cls += " found";
-              mark = '<span class="spot-mark found">찾음</span>';
             } else if (play.errorLines[i]) {
               cls += " missed-answer";
-              mark = '<span class="spot-mark missed">미발견</span>';
+              note = '<span class="fb-note">  // ' + esc(spotErrorNote(play.errorLines[i])) + "</span>";
             } else if (play.wrongClicks && play.wrongClicks[i]) {
               cls += " wrong-pick";
-              mark = '<span class="spot-mark wrong">오선택</span>';
             }
           } else if (play.found[i]) {
             cls += " found";
           }
           html += '<div class="' + cls + '" data-li="' + i + '"><span class="ln">' + (i + 1) + '</span><span class="src">' +
-            (line ? esc(line) : "&nbsp;") + "</span>" + mark + "</div>";
+            (line ? esc(line) : "&nbsp;") + note + "</span></div>";
         });
         html += "</div>";
         el.board.innerHTML = html;

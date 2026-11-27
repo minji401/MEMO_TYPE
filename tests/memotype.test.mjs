@@ -65,6 +65,9 @@ function loadLogic() {
     extractFunction(html, "collectSpotTypes"),
     extractFunction(html, "mutateTypeLine"),
     extractFunction(html, "mutateAddSemi"),
+    extractFunction(html, "mutateSignLine"),
+    extractFunction(html, "isCopyableSpotLine"),
+    extractFunction(html, "spotErrorNote"),
     extractFunction(html, "enforceSpotBodyHints"),
     extractFunction(html, "mutateForSpot"),
     extractFunction(html, "gradeKeywordSet"),
@@ -74,7 +77,7 @@ function loadLogic() {
   ].join("\n");
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, isPlausibleSpotType, collectSpotTypes, mutateTypeLine, mutateAddSemi, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, isPlausibleSpotType, collectSpotTypes, mutateTypeLine, mutateAddSemi, mutateSignLine, isCopyableSpotLine, spotErrorNote, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
   );
   return factory(KEYWORDS);
 }
@@ -210,6 +213,11 @@ test("countdown uses 3-2-1 then a 1s title hold before unlock", () => {
   assert.match(fn, /cap.classList.add\("show"\);[\s\S]*?\}, 1000\)\)/);
   assert.match(fn, /setInputLocked\(true\)/);
   assert.match(fn, /setInputLocked\(false\)/);
+  assert.match(fn, /spot-countdown/);
+  assert.match(html, /body\.spot-game\.spot-countdown \.code-scroll/);
+  assert.match(html, /\.countdown \{[\s\S]*?background:\s*var\(--bg-elev\)/);
+  assert.match(extractFunction(html, "beginGamePlay"), /el\.board\.innerHTML = ""/);
+  assert.match(extractFunction(html, "beginGamePlay"), /renderSpotBoard\(\);[\s\S]*startedAt/);
 });
 
 test("typing is locked until countdown finishes", () => {
@@ -351,9 +359,21 @@ test("spot finish offers review of picks and missed answers", () => {
   assert.match(html, /finishReviewBtn/);
   assert.match(extractFunction(html, "enterSpotReview"), /reviewing = true/);
   assert.match(extractFunction(html, "returnFromSpotReview"), /finish\.classList\.add\("show"\)/);
-  assert.match(extractFunction(html, "renderSpotBoard"), /미발견/);
-  assert.match(extractFunction(html, "renderSpotBoard"), /오선택/);
-  assert.match(extractFunction(html, "renderSpotBoard"), /찾음/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /spotErrorNote/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /fb-note/);
+  assert.doesNotMatch(extractFunction(html, "renderSpotBoard"), /spot-mark/);
+  assert.doesNotMatch(html, /body\.spot-reviewing \.spot-line:hover \.src \{ background: transparent/);
+  assert.equal(logic.spotErrorNote({ type: "semi" }).includes("세미콜론"), true);
+  assert.equal(logic.spotErrorNote({ type: "insert" }).includes("끼어"), true);
+});
+
+test("spot sign mutator flips ++/-- and +/- only", () => {
+  assert.equal(logic.mutateSignLine("    i++;"), "    i--;");
+  assert.equal(logic.mutateSignLine("    i--;"), "    i++;");
+  assert.equal(logic.mutateSignLine("    x = a + b;"), "    x = a - b;");
+  assert.equal(logic.mutateSignLine("    x = a - b;"), "    x = a + b;");
+  assert.equal(logic.mutateSignLine("    p->n += 1;"), "    p->n -= 1;");
+  assert.equal(logic.mutateSignLine("    return 1;"), null);
 });
 
 test("spot finish shows time and misses instead of WPM typos", () => {
@@ -522,27 +542,32 @@ test("spot errors always differ and non-swap mutations do not camouflage", () =>
   }
 });
 
-test("spot insert junk stays inside a function body", () => {
+test("spot insert copies an existing normal line inside a function body", () => {
   const src = [
     "#include <stdio.h>",
     "void ClearStack(Stack* p) {",
     "    p->top = -1;",
+    "    p->count = 0;",
     "    return;",
     "}",
     "void DestroyStack(Stack* p) {",
+    "    free(p->stack);",
     "    free(p);",
     "    return;",
     "}"
   ].join("\n");
-  let sawInsert = false;
   for (let n = 0; n < 120; n += 1) {
     const out = logic.mutateForSpot(src, "c");
     Object.keys(out.errors).forEach(function (key) {
       const i = Number(key);
       if (out.errors[i].type !== "insert") return;
-      sawInsert = true;
       assert.equal(out.original[i], "");
-      assert.match(out.lines[i], /printf|puts|spot junk/);
+      assert.doesNotMatch(out.lines[i], /printf|puts|debug|spot junk/i);
+      const trimmed = String(out.lines[i]).trim();
+      const donor = out.lines.some(function (line, j) {
+        return j !== i && String(line).trim() === trimmed;
+      });
+      assert.ok(donor, "inserted line must be copied from existing code");
       let depth = 0;
       for (let k = 0; k < i; k += 1) {
         const row = out.lines[k] || "";
@@ -552,10 +577,28 @@ test("spot insert junk stays inside a function body", () => {
         }
       }
       assert.ok(depth > 0);
-      assert.notEqual(String(out.lines[out.lines.length - 1]).trim(), out.lines[i].trim());
     });
   }
-  assert.ok(sawInsert || true); // insert is optional filler; when present must be inside
+});
+
+test("spot type pool never includes lowercase field names like front", () => {
+  const types = logic.collectSpotTypes([
+    "typedef struct {",
+    "    int front;",
+    "    int rear;",
+    "} Queue;",
+    "TreeNode* RightTree(TreeNode *bt) {",
+    "    return bt->right;",
+    "}"
+  ], "c");
+  assert.equal(types.indexOf("front"), -1);
+  assert.equal(types.indexOf("rear"), -1);
+  assert.equal(logic.isPlausibleSpotType("front"), false);
+  const mutated = logic.mutateTypeLine("TreeNode* RightTree(TreeNode *bt) {", types);
+  if (mutated) {
+    assert.doesNotMatch(mutated, /^\s*front\s*\*/);
+    assert.match(mutated, /^\s*(void|int|char|Queue|TreeNode)\s*\*/);
+  }
 });
 
 test("swapped function bodies keep enough original lines to infer", () => {
