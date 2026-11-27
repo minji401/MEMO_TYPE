@@ -1560,6 +1560,7 @@
       doc,
       setDoc,
       deleteDoc,
+      getDocs,
       onSnapshot,
       writeBatch
     } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
@@ -1586,6 +1587,7 @@
       const KEY_STATS_KEY = "memotype_keystats_v1";
       const CODE_TRENDS_KEY = "memotype_code_trends_v1";
       const DELETED_SNIPPETS_KEY = "memotype_deleted_snippets_v1";
+      const MIGRATE_SNIPPETS_KEY = "memotype_snippet_migrate_v1";
       const PRACTICE_KEEP = 40;
 
       const KEYWORDS = {
@@ -2505,16 +2507,52 @@
         renderSnippetSelects();
       }
 
+      function readMigrateState(uid) {
+        try {
+          const all = JSON.parse(localStorage.getItem(MIGRATE_SNIPPETS_KEY) || "{}");
+          return all && typeof all === "object" ? (all[uid] || "") : "";
+        } catch (e) {
+          return "";
+        }
+      }
+
+      function writeMigrateState(uid, value) {
+        try {
+          const all = JSON.parse(localStorage.getItem(MIGRATE_SNIPPETS_KEY) || "{}");
+          const next = all && typeof all === "object" ? all : {};
+          next[uid] = value;
+          localStorage.setItem(MIGRATE_SNIPPETS_KEY, JSON.stringify(next));
+        } catch (e) {}
+      }
+
       async function migrateLocalIfNeeded(uid) {
+        const prev = readMigrateState(uid);
+        if (prev === "done" || prev === "skipped") return;
         const local = readLocalSnippets().filter(function (item) {
           return item && item.id && !isSnippetMarkedDeleted(item.id) && !isBuiltInSnippet(item) && String(item.code || "").trim();
         });
-        if (!local.length) return;
-        const ok = window.confirm("기존 로컬에 저장된 코드를 클라우드 계정에 동기화하시겠습니까?");
-        if (!ok) return;
+        if (!local.length) {
+          writeMigrateState(uid, "done");
+          return;
+        }
+        const cloudIds = {};
+        try {
+          const snap = await getDocs(snippetsCol(uid));
+          snap.forEach(function (d) { cloudIds[d.id] = true; });
+        } catch (e) {}
+        const pending = local.filter(function (item) { return !cloudIds[item.id]; });
+        if (!pending.length) {
+          writeMigrateState(uid, "done");
+          return;
+        }
+        const ok = window.confirm("이 브라우저에만 있던 코드를 클라우드 계정으로 옮길까요?\n(한 번만 묻습니다)");
+        if (!ok) {
+          writeMigrateState(uid, "skipped");
+          return;
+        }
         try {
           const batch = writeBatch(firebaseDb);
-          local.forEach(function (item) {
+          pending.forEach(function (item) {
             batch.set(snippetDoc(uid, item.id), {
               id: item.id,
               title: item.title || "제목 없음",
@@ -2524,6 +2562,7 @@
             }, { merge: true });
           });
           await batch.commit();
+          writeMigrateState(uid, "done");
         } catch (err) {
           window.alert("클라우드 동기화에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.");
         }
