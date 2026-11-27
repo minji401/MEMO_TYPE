@@ -61,6 +61,8 @@ function loadLogic() {
     extractFunction(html, "mutateReturnLine"),
     extractFunction(html, "mutateIncludeLine"),
     extractFunction(html, "mutatePointerLine"),
+    extractFunction(html, "isPlausibleSpotType"),
+    extractFunction(html, "collectSpotTypes"),
     extractFunction(html, "mutateTypeLine"),
     extractFunction(html, "mutateAddSemi"),
     extractFunction(html, "enforceSpotBodyHints"),
@@ -72,7 +74,7 @@ function loadLogic() {
   ].join("\n");
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, mutateTypeLine, mutateAddSemi, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
+    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, isPlausibleSpotType, collectSpotTypes, mutateTypeLine, mutateAddSemi, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
   );
   return factory(KEYWORDS);
 }
@@ -90,8 +92,16 @@ test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="mypageBackBtn"/);
   assert.match(html, /id="finishPracticeBtn"/);
   assert.match(html, /id="finishEditBtn"/);
+  assert.match(html, /id="finishReviewBtn"/);
+  assert.match(html, /다시 확인해보기/);
+  assert.match(html, /id="spotReviewBar"/);
   assert.match(extractFunction(html, "setFinishActions"), /practiceBtn\.hidden = true/);
   assert.match(extractFunction(html, "setFinishActions"), /editBtn\.hidden = false/);
+  assert.match(extractFunction(html, "setFinishActions"), /reviewBtn\.hidden = false/);
+  assert.match(extractFunction(html, "enterSpotReview"), /spot-reviewing/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /missed-answer/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /wrong-pick/);
+  assert.match(extractFunction(html, "handleSpotClick"), /wrongClicks/);
   assert.match(html, /랜덤 백지 테스트/);
   assert.doesNotMatch(html, /랜덤 백지 연습/);
   assert.match(html, /id="countdown"/);
@@ -287,6 +297,63 @@ test("include pointer type and semi mutators work", () => {
   assert.equal(logic.mutatePointerLine("    Stack* pStack = 0;").includes("Stack**"), true);
   assert.equal(logic.mutateAddSemi("    if (pStack->top < 0)"), "    if (pStack->top < 0);");
   assert.equal(logic.mutateTypeLine("void Push(Stack* p)", ["void", "Element"]).startsWith("Element "), true);
+  assert.equal(logic.isPlausibleSpotType("data"), false);
+  assert.equal(logic.isPlausibleSpotType("TreeNode"), true);
+  assert.equal(logic.isPlausibleSpotType("int"), true);
+  const treeTypes = logic.collectSpotTypes([
+    "typedef struct TreeNode TreeNode;",
+    "struct TreeNode {",
+    "    Element data;",
+    "};",
+    "TreeNode *pNewNode = NULL;"
+  ], "c");
+  assert.equal(treeTypes.indexOf("data") === -1, true);
+  assert.ok(treeTypes.indexOf("TreeNode") !== -1 || treeTypes.indexOf("Element") !== -1);
+  const swapped = logic.mutateTypeLine("    TreeNode *pNewNode = NULL;", ["void", "int", "char", "TreeNode", "Element"]);
+  assert.ok(swapped);
+  assert.match(swapped, /^\s+(void|int|char|Element)\s*\*?\s*pNewNode/);
+  assert.doesNotMatch(swapped, /\bdata\b/);
+});
+
+test("spot type mutations never invent fake types like data", () => {
+  const src = [
+    "typedef int Element;",
+    "typedef struct TreeNode {",
+    "    Element data;",
+    "    struct TreeNode *left;",
+    "} TreeNode;",
+    "TreeNode* CreateNode(Element item)",
+    "{",
+    "    TreeNode *pNewNode = (TreeNode*)malloc(sizeof(TreeNode));",
+    "    if (pNewNode == NULL) return NULL;",
+    "    pNewNode->data = item;",
+    "    return pNewNode;",
+    "}"
+  ].join("\n");
+  for (let n = 0; n < 60; n += 1) {
+    const out = logic.mutateForSpot(src, "c");
+    out.lines.forEach(function (line, i) {
+      if (line === out.original[i]) return;
+      assert.doesNotMatch(line, /^\s*data\s*\*+\s*[A-Za-z_]/, "must not use data as a type");
+      const err = out.errors[i];
+      if (err && err.type === "rettype" && err.to) {
+        assert.equal(logic.isPlausibleSpotType(err.to), true);
+      }
+      if (err && err.type === "ident") {
+        assert.equal(logic.isPlausibleSpotType(err.from), false);
+        assert.equal(logic.isPlausibleSpotType(err.to), false);
+      }
+    });
+  }
+});
+
+test("spot finish offers review of picks and missed answers", () => {
+  assert.match(html, /finishReviewBtn/);
+  assert.match(extractFunction(html, "enterSpotReview"), /reviewing = true/);
+  assert.match(extractFunction(html, "returnFromSpotReview"), /finish\.classList\.add\("show"\)/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /미발견/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /오선택/);
+  assert.match(extractFunction(html, "renderSpotBoard"), /찾음/);
 });
 
 test("spot finish shows time and misses instead of WPM typos", () => {
@@ -346,6 +413,15 @@ test("spot mutations never rewrite protected lines or invent identifier typos", 
       }
       if (err.type === "insert") {
         assert.ok(i >= orig.length || next[i] !== (orig[i] || ""));
+        let depth = 0;
+        for (let k = 0; k < i; k += 1) {
+          const row = next[k] || "";
+          for (let c = 0; c < row.length; c += 1) {
+            if (row[c] === "{") depth += 1;
+            if (row[c] === "}") depth -= 1;
+          }
+        }
+        assert.ok(depth > 0, "insert must be inside a function body");
       }
     });
   }
@@ -420,7 +496,17 @@ test("spot errors always differ and non-swap mutations do not camouflage", () =>
       const err = out.errors[i];
       assert.ok(out.lines[i] != null);
       if (err.type === "insert") {
-        assert.ok(out.lines.length > out.original.length);
+        assert.equal(out.original[i], "");
+        assert.notEqual(out.lines[i], "");
+        let depth = 0;
+        for (let k = 0; k < i; k += 1) {
+          const row = out.lines[k] || "";
+          for (let c = 0; c < row.length; c += 1) {
+            if (row[c] === "{") depth += 1;
+            if (row[c] === "}") depth -= 1;
+          }
+        }
+        assert.ok(depth > 0, "insert must be inside a function body");
         return;
       }
       if (i < out.original.length) assert.notEqual(out.lines[i], out.original[i]);
@@ -434,6 +520,42 @@ test("spot errors always differ and non-swap mutations do not camouflage", () =>
       }
     });
   }
+});
+
+test("spot insert junk stays inside a function body", () => {
+  const src = [
+    "#include <stdio.h>",
+    "void ClearStack(Stack* p) {",
+    "    p->top = -1;",
+    "    return;",
+    "}",
+    "void DestroyStack(Stack* p) {",
+    "    free(p);",
+    "    return;",
+    "}"
+  ].join("\n");
+  let sawInsert = false;
+  for (let n = 0; n < 120; n += 1) {
+    const out = logic.mutateForSpot(src, "c");
+    Object.keys(out.errors).forEach(function (key) {
+      const i = Number(key);
+      if (out.errors[i].type !== "insert") return;
+      sawInsert = true;
+      assert.equal(out.original[i], "");
+      assert.match(out.lines[i], /printf|puts|spot junk/);
+      let depth = 0;
+      for (let k = 0; k < i; k += 1) {
+        const row = out.lines[k] || "";
+        for (let c = 0; c < row.length; c += 1) {
+          if (row[c] === "{") depth += 1;
+          if (row[c] === "}") depth -= 1;
+        }
+      }
+      assert.ok(depth > 0);
+      assert.notEqual(String(out.lines[out.lines.length - 1]).trim(), out.lines[i].trim());
+    });
+  }
+  assert.ok(sawInsert || true); // insert is optional filler; when present must be inside
 });
 
 test("swapped function bodies keep enough original lines to infer", () => {

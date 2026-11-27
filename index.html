@@ -1068,10 +1068,68 @@
     }
     .game-range-item input { accent-color: var(--caret); width: 16px; height: 16px; }
 
-    .spot-line { cursor: pointer; border-radius: 6px; }
+    .spot-line { cursor: pointer; border-radius: 6px; position: relative; }
     .spot-line:hover .src { background: rgba(226, 183, 20, 0.08); }
     .spot-line.found .src { background: rgba(226, 183, 20, 0.16); }
     .spot-line.miss-flash .src { background: rgba(202, 71, 84, 0.28); }
+    body.spot-reviewing .spot-line { cursor: default; }
+    body.spot-reviewing .spot-line:hover .src { background: transparent; }
+    .spot-line.wrong-pick .src { background: rgba(202, 71, 84, 0.22); }
+    .spot-line.missed-answer .src { background: rgba(90, 168, 212, 0.22); }
+    .spot-mark {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      font-family: "Noto Sans KR", sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .spot-mark.found { color: #e2b714; background: rgba(226, 183, 20, 0.14); }
+    .spot-mark.wrong { color: #e06c75; background: rgba(202, 71, 84, 0.16); }
+    .spot-mark.missed { color: #7ec8e3; background: rgba(90, 168, 212, 0.16); }
+    .spot-review-bar {
+      display: none;
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: 10px;
+      z-index: 4;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(32, 34, 37, 0.96);
+      border: 1px solid var(--sub-alt);
+      font-family: "Noto Sans KR", sans-serif;
+      font-size: 13px;
+      color: var(--sub);
+    }
+    body.spot-reviewing .spot-review-bar { display: flex; }
+    .spot-review-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      align-items: center;
+    }
+    .spot-review-legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .spot-review-legend .lg-found i { background: #e2b714; }
+    .spot-review-legend .lg-wrong i { background: #e06c75; }
+    .spot-review-legend .lg-missed i { background: #7ec8e3; }
+    body.spot-reviewing .code-scroll { padding-top: 64px; }
 
     .mypage-section { margin-bottom: 22px; }
     .mypage-section h3 { font-size: 15px; margin-bottom: 10px; color: var(--caret); }
@@ -1214,14 +1272,15 @@
     }
     .mypage-line-wrap {
       position: relative;
-      height: 200px;
-      min-height: 200px;
+      height: auto;
+      min-height: 0;
       padding: 0;
       box-sizing: border-box;
     }
     .mypage-line-wrap svg {
       width: 100%;
-      height: 168px;
+      height: auto;
+      aspect-ratio: 600 / 168;
       display: block;
       overflow: visible;
     }
@@ -1501,10 +1560,19 @@
           </div>
           <div class="finish-actions">
             <button type="button" class="btn primary" id="againBtn">다시 하기</button>
+            <button type="button" class="btn" id="finishReviewBtn" hidden>다시 확인해보기</button>
             <button type="button" class="btn" id="finishPracticeBtn">연습하기</button>
             <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
           </div>
         </div>
+      </div>
+      <div class="spot-review-bar" id="spotReviewBar" aria-live="polite">
+        <div class="spot-review-legend">
+          <span class="lg-found"><i></i>찾은 줄</span>
+          <span class="lg-wrong"><i></i>오답 선택</span>
+          <span class="lg-missed"><i></i>못 찾은 답</span>
+        </div>
+        <button type="button" class="btn" id="spotReviewBackBtn">결과로 돌아가기</button>
       </div>
     </main>
 
@@ -3393,12 +3461,19 @@
       function setFinishActions(kind) {
         const practiceBtn = document.getElementById("finishPracticeBtn");
         const editBtn = document.getElementById("finishEditBtn");
-        if (kind === "game") {
+        const reviewBtn = document.getElementById("finishReviewBtn");
+        if (kind === "spot") {
           if (practiceBtn) practiceBtn.hidden = false;
           if (editBtn) editBtn.hidden = true;
+          if (reviewBtn) reviewBtn.hidden = false;
+        } else if (kind === "game") {
+          if (practiceBtn) practiceBtn.hidden = false;
+          if (editBtn) editBtn.hidden = true;
+          if (reviewBtn) reviewBtn.hidden = true;
         } else {
           if (practiceBtn) practiceBtn.hidden = true;
           if (editBtn) editBtn.hidden = false;
+          if (reviewBtn) reviewBtn.hidden = true;
         }
       }
 
@@ -3414,7 +3489,7 @@
           el.finWpm.textContent = String(values.time || 0);
           el.finAcc.textContent = String(values.misses || 0);
           el.finErr.textContent = "";
-          setFinishActions("game");
+          setFinishActions("spot");
         } else {
           if (l1) l1.textContent = "WPM";
           if (l2) l2.textContent = "정확도";
@@ -3425,6 +3500,28 @@
           el.finErr.textContent = String(values.errors || 0);
           setFinishActions("practice");
         }
+      }
+
+      function leaveSpotReview() {
+        document.body.classList.remove("spot-reviewing");
+        if (state.play) state.play.reviewing = false;
+      }
+
+      function enterSpotReview() {
+        if (!state.play || state.play.kind !== "spot") return;
+        state.play.reviewing = true;
+        document.body.classList.add("spot-reviewing");
+        el.finish.classList.remove("show");
+        renderSpotBoard();
+        updateCatcherLayer();
+      }
+
+      function returnFromSpotReview() {
+        if (!state.play || state.play.kind !== "spot") return;
+        leaveSpotReview();
+        renderSpotBoard();
+        el.finish.classList.add("show");
+        updateCatcherLayer();
       }
 
       function complete() {
@@ -4357,6 +4454,7 @@
         document.body.classList.remove("game-play");
         document.body.classList.remove("spot-game");
         document.body.classList.remove("recite-game");
+        leaveSpotReview();
         el.board.style.paddingBottom = "";
         const hud = document.getElementById("gameHud");
         if (hud) hud.style.display = "";
@@ -4471,8 +4569,11 @@
           startedAt: null,
           errorLines: {},
           found: {},
+          wrongClicks: {},
+          reviewing: false,
           displayLines: null
         };
+        leaveSpotReview();
         document.body.classList.add("game-play");
         document.body.classList.toggle("spot-game", kind === "spot");
         document.body.classList.toggle("recite-game", kind === "recite");
@@ -4679,12 +4780,50 @@
         return null;
       }
 
+      function isPlausibleSpotType(name) {
+        if (!name) return false;
+        if (/^(void|int|char|float|double|size_t|bool|Boolean|Element|Stack|Queue|TreeNode)$/.test(name)) return true;
+        return /^[A-Z][A-Za-z0-9_]*$/.test(name);
+      }
+
+      function collectSpotTypes(original, lang) {
+        const kw = KEYWORDS[lang] || KEYWORDS.c;
+        const types = ["void", "int", "char"];
+        function addType(name) {
+          if (!name || kw.has(name) || !isPlausibleSpotType(name)) return;
+          if (types.indexOf(name) === -1) types.push(name);
+        }
+        (original || []).forEach(function (line) {
+          const text = String(line || "");
+          const typedefAlias = text.match(/typedef\b[\s\S]*?\b([A-Za-z_]\w*)\s*;/);
+          if (typedefAlias) addType(typedefAlias[1]);
+          const structName = text.match(/\b(?:struct|class|enum|union)\s+([A-Za-z_]\w*)/);
+          if (structName) addType(structName[1]);
+          if (isDeclLine(line, lang) || isTypedefLine(line) || /^\s*[A-Za-z_]\w*\s+[A-Za-z_]\w*\s*\(/.test(text)) {
+            const lead = text.match(/^\s*(?:(?:unsigned|signed|static|const|volatile|extern|register|struct|enum|union|class)\s+)*([A-Za-z_]\w*)/);
+            if (lead) addType(lead[1]);
+          }
+        });
+        return types.filter(isPlausibleSpotType);
+      }
+
       function mutateTypeLine(line, types) {
-        const m = line.match(/^(\s*)([A-Za-z_]\w*)(\s+)([A-Za-z_]\w*\s*\()/);
+        const pool = (types || []).filter(isPlausibleSpotType);
+        if (pool.length < 2) return null;
+        // Function return: Type name(  or Type* name(
+        let m = line.match(/^(\s*)([A-Za-z_]\w*)(\s+)([A-Za-z_]\w*\s*\()/);
+        if (!m) m = line.match(/^(\s*)([A-Za-z_]\w*)(\s*\*+\s*)([A-Za-z_]\w*\s*\()/);
+        // Local decl / allocation: Type[*] name
+        if (!m) {
+          m = line.match(/^(\s*)([A-Za-z_]\w*)(\s*\*+\s*|\s+)([A-Za-z_]\w*)(?!\s*\()/);
+          if (m && /^(if|for|while|switch|return|sizeof|else|case)$/.test(m[2])) m = null;
+        }
         if (!m) return null;
-        const others = types.filter(function (t) { return t !== m[2]; });
+        if (!isPlausibleSpotType(m[2])) return null;
+        const others = pool.filter(function (t) { return t !== m[2]; });
         if (!others.length) return null;
         const to = others[Math.floor(Math.random() * others.length)];
+        if (!isPlausibleSpotType(to)) return null;
         return m[1] + to + m[3] + m[4] + line.slice(m[0].length);
       }
 
@@ -4699,8 +4838,10 @@
         const original = source.split("\n");
         const lines = original.slice();
         const kw = KEYWORDS[lang] || KEYWORDS.c;
+        const types = collectSpotTypes(original, lang);
+        const typeSet = {};
+        types.forEach(function (t) { typeSet[t] = true; });
         const vars = [];
-        const types = ["void", "int", "char", "Element", "Boolean", "Stack", "Queue"];
         const callNames = [];
         const ranges = findFunctionRanges(original);
         const defNames = ranges.map(function (r) { return r.name; });
@@ -4708,8 +4849,8 @@
           const names = identsIn(line);
           if (isDeclLine(line, lang) || isTypedefLine(line)) {
             names.forEach(function (n) {
-              if (!kw.has(n) && vars.indexOf(n) === -1) vars.push(n);
-              if (/^[A-Z]/.test(n) && types.indexOf(n) === -1) types.push(n);
+              if (kw.has(n) || typeSet[n] || isPlausibleSpotType(n)) return;
+              if (vars.indexOf(n) === -1) vars.push(n);
             });
           }
           const fn = line.match(/([A-Za-z_]\w*)\s*\(/);
@@ -4796,10 +4937,14 @@
               const nextLine = mutateTypeLine(line, types);
               if (acceptMutation(i, nextLine, { type: "rettype" })) done = true;
             } else if (kind === "ident") {
-              const usedVars = identsIn(line).filter(function (n) { return vars.indexOf(n) !== -1; });
+              const usedVars = identsIn(line).filter(function (n) {
+                return vars.indexOf(n) !== -1 && !typeSet[n] && !isPlausibleSpotType(n);
+              });
               if (usedVars.length && vars.length >= 2) {
                 const from = usedVars[Math.floor(Math.random() * usedVars.length)];
-                const others = vars.filter(function (v) { return v !== from; });
+                const others = vars.filter(function (v) {
+                  return v !== from && !typeSet[v] && !isPlausibleSpotType(v);
+                });
                 if (others.length) {
                   const to = others[Math.floor(Math.random() * others.length)];
                   const nextLine = line.replace(new RegExp("\\b" + from + "\\b"), to);
@@ -4844,19 +4989,37 @@
           }
         });
 
-        // insert unnecessary lines at end (never delete / never shift earlier lines)
+        // Insert an extra statement inside a function body (never after the whole file).
         if (Object.keys(errors).length < want) {
-          const junkPool = [
-            "    printf(\"debug\");",
-            "    puts(\"x\");",
-            "    /* spot junk */;"
-          ];
-          for (let j = 0; j < junkPool.length; j += 1) {
-            const junk = junkPool[j];
-            if (spotLineExistsElsewhere(junk, lines, -1)) continue;
-            lines.push(junk);
-            errors[lines.length - 1] = { type: "insert" };
-            break;
+          const hosts = ranges.filter(function (r) {
+            return r && r.body && r.body.length >= 1 && r.end > r.start;
+          });
+          if (hosts.length) {
+            const host = hosts[Math.floor(Math.random() * hosts.length)];
+            const insertAt = host.end;
+            let indent = "    ";
+            const sample = lines[host.body[host.body.length - 1]] || "";
+            const lead = String(sample).match(/^\s*/);
+            if (lead && lead[0]) indent = lead[0];
+            const junkPool = lang === "python"
+              ? [indent + "print(\"debug\")", indent + "x = x  # spot"]
+              : [indent + "printf(\"debug\");", indent + "puts(\"x\");", indent + "/* spot junk */;"];
+            for (let j = 0; j < junkPool.length; j += 1) {
+              const junk = junkPool[j];
+              if (spotLineExistsElsewhere(junk, lines, -1)) continue;
+              // insertAt is the closing "}" line — splice keeps junk inside the body.
+              const shifted = {};
+              Object.keys(errors).forEach(function (key) {
+                const idx = Number(key);
+                shifted[idx >= insertAt ? idx + 1 : idx] = errors[key];
+              });
+              Object.keys(errors).forEach(function (key) { delete errors[key]; });
+              Object.keys(shifted).forEach(function (key) { errors[key] = shifted[key]; });
+              lines.splice(insertAt, 0, junk);
+              original.splice(insertAt, 0, "");
+              errors[insertAt] = { type: "insert" };
+              break;
+            }
           }
         }
 
@@ -4876,12 +5039,27 @@
       function renderSpotBoard() {
         const play = state.play;
         if (!play || !play.displayLines) return;
+        const reviewing = !!play.reviewing;
         let html = '<div class="code">';
         play.displayLines.forEach(function (line, i) {
           let cls = "line spot-line";
-          if (play.found[i]) cls += " found";
+          let mark = "";
+          if (reviewing) {
+            if (play.found[i]) {
+              cls += " found";
+              mark = '<span class="spot-mark found">찾음</span>';
+            } else if (play.errorLines[i]) {
+              cls += " missed-answer";
+              mark = '<span class="spot-mark missed">미발견</span>';
+            } else if (play.wrongClicks && play.wrongClicks[i]) {
+              cls += " wrong-pick";
+              mark = '<span class="spot-mark wrong">오선택</span>';
+            }
+          } else if (play.found[i]) {
+            cls += " found";
+          }
           html += '<div class="' + cls + '" data-li="' + i + '"><span class="ln">' + (i + 1) + '</span><span class="src">' +
-            (line ? esc(line) : "&nbsp;") + "</span></div>";
+            (line ? esc(line) : "&nbsp;") + "</span>" + mark + "</div>";
         });
         html += "</div>";
         el.board.innerHTML = html;
@@ -4890,6 +5068,7 @@
 
       function handleSpotClick(li) {
         if (!state.play || state.play.kind !== "spot" || state.inputLocked || state.finished) return;
+        if (state.play.reviewing) return;
         if (state.play.found[li]) return;
         if (state.play.errorLines[li]) {
           state.play.found[li] = true;
@@ -4919,6 +5098,8 @@
           }
           return;
         }
+        if (!state.play.wrongClicks) state.play.wrongClicks = {};
+        state.play.wrongClicks[li] = true;
         state.play.misses = (state.play.misses || 0) + 1;
         playClick(true);
         updateGameHud();
@@ -6197,6 +6378,7 @@
       document.getElementById("startBtn").addEventListener("click", startFromModal);
       document.getElementById("restartBtn").addEventListener("click", restart);
       document.getElementById("againBtn").addEventListener("click", function () {
+        leaveSpotReview();
         if (state.play && state.play.pool && state.play.pool.length) {
           const kind = state.play.kind;
           const pool = state.play.pool;
@@ -6206,7 +6388,10 @@
         }
         restart();
       });
+      document.getElementById("finishReviewBtn").addEventListener("click", enterSpotReview);
+      document.getElementById("spotReviewBackBtn").addEventListener("click", returnFromSpotReview);
       document.getElementById("finishPracticeBtn").addEventListener("click", function () {
+        leaveSpotReview();
         if (state.play) {
           exitGame();
           return;
@@ -6217,6 +6402,7 @@
         focusPracticeInput();
       });
       document.getElementById("finishEditBtn").addEventListener("click", function () {
+        leaveSpotReview();
         if (state.play) {
           exitGame();
           openModal(false);
