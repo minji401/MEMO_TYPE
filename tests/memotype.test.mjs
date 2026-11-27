@@ -75,14 +75,22 @@ function loadLogic() {
     extractFunction(html, "stripOptionalControlBraces"),
     extractFunction(html, "compareCodesFlexible")
   ].join("\n");
+  // Modules are strict; compile extracted helpers the same way so reserved
+  // identifiers like `protected` fail here instead of only in the browser.
   const factory = new Function(
     "KEYWORDS",
-    bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, isPlausibleSpotType, collectSpotTypes, mutateTypeLine, mutateAddSemi, mutateSignLine, isCopyableSpotLine, spotErrorNote, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
+    '"use strict";\n' + bundle + "; return { isBuiltInId, isBuiltInSnippet, isTypedefLine, isDeclLine, identsIn, isSpotProtectedLine, spotLineExistsElsewhere, findFunctionRanges, mutateReturnLine, mutateIncludeLine, mutatePointerLine, isPlausibleSpotType, collectSpotTypes, mutateTypeLine, mutateAddSemi, mutateSignLine, isCopyableSpotLine, spotErrorNote, enforceSpotBodyHints, mutateForSpot, gradeKeywordSet, tokenizeForGrade, stripOptionalControlBraces, compareCodesFlexible };"
   );
   return factory(KEYWORDS);
 }
 
 const logic = loadLogic();
+
+test("spot logic helpers compile under strict mode", () => {
+  assert.equal(typeof logic.mutateSignLine, "function");
+  assert.equal(logic.mutateSignLine("    i++;"), "    i--;");
+  assert.doesNotMatch(extractFunction(html, "mutateSignLine"), /\b(?:const|let|var)\s+protected\b/);
+});
 
 test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="gameLaunchBtn"/);
@@ -96,7 +104,8 @@ test("HTML has game launch, pick, range, countdown, give-up", () => {
   assert.match(html, /id="finishPracticeBtn"/);
   assert.match(html, /id="finishEditBtn"/);
   assert.match(html, /id="finishReviewBtn"/);
-  assert.match(html, /다시 확인해보기/);
+  assert.match(html, /정답 보기/);
+  assert.match(html, /타자 연습으로/);
   assert.match(html, /id="spotReviewBar"/);
   assert.match(extractFunction(html, "setFinishActions"), /practiceBtn\.hidden = true/);
   assert.match(extractFunction(html, "setFinishActions"), /editBtn\.hidden = false/);

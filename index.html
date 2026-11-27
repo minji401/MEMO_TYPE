@@ -1557,8 +1557,8 @@
           </div>
           <div class="finish-actions">
             <button type="button" class="btn primary" id="againBtn">다시 하기</button>
-            <button type="button" class="btn" id="finishReviewBtn" hidden>다시 확인해보기</button>
-            <button type="button" class="btn" id="finishPracticeBtn">연습하기</button>
+            <button type="button" class="btn" id="finishReviewBtn" hidden>정답 보기</button>
+            <button type="button" class="btn" id="finishPracticeBtn">타자 연습으로</button>
             <button type="button" class="btn" id="finishEditBtn">코드 변경</button>
           </div>
         </div>
@@ -1614,7 +1614,7 @@
         <div class="recite-feedback-code" id="reciteResultCode"></div>
       </div>
       <div class="recite-result-actions">
-        <button type="button" class="btn" id="reciteResultPractice">연습하기</button>
+        <button type="button" class="btn" id="reciteResultPractice">타자 연습으로</button>
         <button type="button" class="btn primary" id="reciteResultAgain">다시 하기</button>
       </div>
     </div>
@@ -4856,10 +4856,10 @@
           if (next !== text) return next;
         }
         // Single +/- only (keep -> intact)
-        const protected = [];
+        const held = [];
         const masked = text.replace(/->/g, function (tok) {
-          protected.push(tok);
-          return "\0P" + (protected.length - 1) + "\0";
+          held.push(tok);
+          return "\0P" + (held.length - 1) + "\0";
         });
         if (!/[+-]/.test(masked)) return null;
         let flipped = 0;
@@ -4869,7 +4869,7 @@
         });
         if (!flipped) return null;
         return nextMasked.replace(/\0P(\d+)\0/g, function (_, idx) {
-          return protected[Number(idx)];
+          return held[Number(idx)];
         });
       }
 
@@ -4915,7 +4915,7 @@
           return "함수 이름이 바뀌었습니다";
         }
         if (err.type === "include") return "헤더 이름이 바뀌었습니다";
-        if (err.type === "sign") return "+/− 부호가 바뀌었습니다";
+        if (err.type === "sign") return "+/- 부호가 바뀌었습니다";
         return "이 줄이 바뀌었습니다";
       }
 
