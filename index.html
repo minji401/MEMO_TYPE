@@ -139,6 +139,34 @@
       font-weight: 500;
       text-overflow: ellipsis;
     }
+    .snippet-select-shell {
+      position: relative;
+      display: inline-flex;
+      min-width: 0;
+      max-width: min(240px, 100%);
+      flex: 0 1 auto;
+      vertical-align: middle;
+    }
+    .modal-snippet-row .snippet-select-shell {
+      flex: 1;
+      max-width: none;
+      min-width: 180px;
+    }
+    .snippet-select.is-open {
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 80;
+      width: 100%;
+      min-width: 100%;
+      max-width: none;
+      height: auto;
+      max-height: calc(1.55em * 8 + 18px);
+      overflow-y: auto;
+      padding: 6px 8px;
+      background: var(--bg-elev);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
 
     .mode-slot {
       display: flex;
@@ -780,8 +808,7 @@
       flex-wrap: wrap;
     }
     .modal-snippet-row .snippet-select {
-      flex: 1;
-      min-width: 180px;
+      width: 100%;
       max-width: none;
     }
 
@@ -6079,6 +6106,51 @@
         }
         openModal(false);
       });
+
+      function bindSnippetSelectLimit(sel) {
+        if (!sel || sel.dataset.limitBound) return;
+        sel.dataset.limitBound = "1";
+        if (!sel.parentElement || !sel.parentElement.classList.contains("snippet-select-shell")) {
+          const shell = document.createElement("span");
+          shell.className = "snippet-select-shell";
+          sel.parentNode.insertBefore(shell, sel);
+          shell.appendChild(sel);
+        }
+        function openList() {
+          const count = Math.max(2, Math.min(8, sel.options.length || 8));
+          sel.size = count;
+          sel.classList.add("is-open");
+        }
+        function closeList() {
+          if (sel.size === 1 && !sel.classList.contains("is-open")) return;
+          sel.size = 1;
+          sel.classList.remove("is-open");
+        }
+        sel.addEventListener("mousedown", function (e) {
+          if (sel.size > 1) return;
+          e.preventDefault();
+          openList();
+          sel.focus();
+        });
+        sel.addEventListener("keydown", function (e) {
+          if (sel.size === 1 && (e.key === "Enter" || e.key === " " || e.key === "ArrowDown")) {
+            e.preventDefault();
+            openList();
+          } else if (sel.size > 1 && e.key === "Escape") {
+            e.preventDefault();
+            closeList();
+          }
+        });
+        sel.addEventListener("blur", function () {
+          setTimeout(function () {
+            if (document.activeElement !== sel) closeList();
+          }, 120);
+        });
+        sel.addEventListener("change", closeList);
+      }
+
+      bindSnippetSelectLimit(el.snippetSelect);
+      bindSnippetSelectLimit(el.modalSnippetSelect);
 
       el.snippetSelect.addEventListener("change", function () {
         if (!el.snippetSelect.value) return;

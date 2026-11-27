@@ -156,6 +156,15 @@ test("cloud sync keeps my codes and meta stats across devices", () => {
   assert.match(html, /mypage-chart-wrap\.fill[\s\S]*flex:\s*1\s+1\s+0\s*!important/);
 });
 
+test("snippet select opens as an 8-row scroll list", () => {
+  assert.match(html, /snippet-select-shell/);
+  assert.match(html, /\.snippet-select\.is-open/);
+  assert.match(extractFunction(html, "bindSnippetSelectLimit"), /size\s*=\s*count/);
+  assert.match(extractFunction(html, "bindSnippetSelectLimit"), /Math\.min\(8/);
+  assert.match(html, /bindSnippetSelectLimit\(el\.snippetSelect\)/);
+  assert.match(html, /bindSnippetSelectLimit\(el\.modalSnippetSelect\)/);
+});
+
 test("practice start warns when snippet is unsaved", () => {
   assert.match(extractFunction(html, "hasUnsavedSnippetChanges"), /creatingSnippet/);
   assert.match(extractFunction(html, "startFromModal"), /hasUnsavedSnippetChanges/);
